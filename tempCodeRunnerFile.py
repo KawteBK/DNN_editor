@@ -1,1 +1,0 @@
-print("kimi wa gojo satoru dakara saikyo nanoka? saikyo kara ,gojo satoru aru ka?");
