@@ -29,7 +29,7 @@ class dense(layer):
         if(len(inputShape)<1):
             raise ValueError("Dense layer expects at least 1D input")
         else:
-            return inputShape[:-1]+ self.units #return (inputShape[:-1], self.units) 
+            return inputShape[:-1]+ self._units #return (inputShape[:-1], self.units) 
 
 
 
@@ -116,7 +116,7 @@ class pooling(layer): #this will handle only 2D pooling for now, we will add 1D 
         C,H,W = inputShape
         H_out = int((H - self._poolSize[0] + 2 * self._padding[0]) / self._strides[0]) + 1
         W_out = int((W - self._poolSize[1] + 2 * self._padding[1]) / self._strides[1]) + 1
-        return (H_out, W_out)
+        return (C,H_out, W_out)
         
      
 
@@ -126,7 +126,7 @@ class pooling(layer): #this will handle only 2D pooling for now, we will add 1D 
 
 
 
-class Activation(Layer):
+class Activation(layer):
     def __init__(self, activationType, id, name, role=None, inputShape=None, outputShape=None):
         super().__init__(id, name, role, inputShape, outputShape)
 
