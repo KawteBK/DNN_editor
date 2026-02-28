@@ -45,7 +45,7 @@ class Network:
             ] #the first conn will take the value of the connection that will get after itirating on all connection and finds its 'to' and 'from' not equal to the layer we just deleted
         del self._outgoing[layerId]
         del self._incoming[layerId]
-        del self.layers[layerId]
+        
 
         return True
     
