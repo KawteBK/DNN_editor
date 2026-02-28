@@ -3,6 +3,8 @@
 
 
 class Layer:
+
+    
     def __init__(self,id, name, role = None , inputShape = None, outputShape = None) -> None:
 
         self._id=id
@@ -10,6 +12,8 @@ class Layer:
         self._role=role
         self._inputShape=inputShape
         self._outputShape=outputShape
+        self._isInput = False
+        self._isLocked = False
     
     def getOutputShape(self, inputShape): 
         
@@ -18,7 +22,17 @@ class Layer:
 
 
 
-
+class InputLayer (Layer): 
+     def __init__(self, inputShape):
+        super().__init__(
+            id="input",
+            name="Input",
+            role="input",
+            inputShape=None,
+            outputShape=inputShape
+        )
+        self._isInput = True
+        self._isLocked = True
 
 
 
@@ -26,14 +40,14 @@ class Dense(Layer):
     def __init__(self, unit, useBias, dropout,id, name, role, inputShape, outputShape) -> None:
         super().__init__(id, name, role, inputShape, outputShape)
         self._unit=unit
-        self._useBias=useBias
+        self._useBias=useBias 
         self._dropout=dropout
 
-    def getOutputShape(self, inputShape): 
+    def getOutputShape(self, inputShape): #this 
         if(len(inputShape)<1):
             raise ValueError("Dense layer expects at least 1D input")
         else:
-            return inputShape[:-1]+ (self._unit) #return (inputShape[:-1], self.units) 
+            return inputShape[:-1]+ (self._unit,) #return (inputShape[:-1], self.units) 
 
 
 
