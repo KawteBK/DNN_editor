@@ -101,55 +101,28 @@ class Network:
         return True
     
 
-    def getInputLayers(self) -> list[Layer]:
-        incoming = {conn._toLayer for conn in self.connections}
 
-        return [
-            layer for layer_id, layer in self.layers.items()
-            if layer_id not in incoming
-        ]
+
+    def getInputLayers(self) -> list[Layer]:
+
+        return [self.layers[lid] for lid, parents in self._incoming.items() if not parents]
+
+        
+
+        
     
     def getOutputLayers(self):
-        outgoing = {conn._fromLayer for conn in self.connections}
+        return [self.layers[lid] for lid, children in self._outgoing.items() if not children]
 
-        return [
-            layer for layer_id, layer in self.layers.items()
-            if layer_id not in outgoing
-        ]
     
     def get_parents(self, layerId):
-         return self._incoming.get[layerId, []]
-
-
-    def validate(self): #here we're just cheking if the structure is graph- valid 
-        if not self.layers:
-            return False
-
-        try:
-            sorted_layers = self.topological_sort()
-        except Exception:
-            return False
-
-    # reuse connection data you already have
-        incoming = {conn._toLayer for conn in self.connections}
-        outgoing = {conn._fromLayer for conn in self.connections}
-
-        has_input = any(lid not in incoming for lid in self.layers)
-        has_output = any(lid not in outgoing for lid in self.layers)
-
-        return has_input and has_output
+         return self._incoming.get(layerId,[])
     
+    def get_children(self,layerId):
+        return self._outgoing.get(layerId,[])
 
 
-    def generateSummary(self) -> dict[str, str]:
-        return {
-            "Network ID": self.id,
-            "Total Layers": str(len(self.layers)),
-            "Total Connections": str(len(self.connections)),
-            "Input Layers": ", ".join(l._id for l in self.getInputLayers()),
-            "Output Layers": ", ".join(l._id for l in self.getOutputLayers())
-        }
-        
+
 
         
 
@@ -157,85 +130,75 @@ class Network:
       # this one is to find the correct execution order of layers in a directed graph
       # using Kahn’s Algorithm
 
-    def topological_sort_oldone(self): #this version is slow, but i am attached to it its like O(v*e)
-
-        from collections import deque
-        #bismilah, we initialize the dict, for now y'all have 0 in-degrees
-        in_degree = {layer_id: 0 for layer_id in self.layers} #we give every node(layer) 0 as number of edges
-
-        # calculate the incoming edges
-        for conn in self.connections: #we iterate on all connection, if we find a tolayeer id, we increment this layer's in-degrees 
-             in_degree[conn._toLayer] += 1
-
-        queue = deque(
-            [layer_id for layer_id, deg in in_degree.items() if deg == 0] # in_degree.items()  returns tuples like ("id1", 2)
-            )
-
-        sorted_layers = []
-
-        while queue: 
-            current = queue.popleft() #we remove the first layer (that should have 0 indegrees) from the queue then we add it to the sortedlayers
-            sorted_layers.append(self.layers[current]) #cuurent have the id of the layer, and we append that layer, not as an id , like the object layer
-
-            for conn in self.connections:
-              if conn._fromLayer == current:    #we find all the nodes that had inconection from the layer we removed from the queue(current)
-                 in_degree[conn._toLayer] -= 1      #we decrement the in-degrees of those layers by 1, because we just "removed" one of their incoming edges
-                 if in_degree[conn._toLayer] == 0:       #and after the decrease, if it will no longer have any incoming edges (ywli sommet source), we add it to the queue to be processed in the next iterations
-                        queue.append(conn._toLayer)
-
-        if len(sorted_layers) != len(self.layers):
-            raise Exception("Cycle detected in network!")
-
-        return sorted_layers
-    
     
     
     def topological_sort(self):
-        from collections import deque, defaultdict
 
-        in_degree = {layer_id: 0 for layer_id in self.layers}
-        adjacency = defaultdict(list)
-
-        for conn in self.connections:
-            in_degree[conn._toLayer] += 1
-            adjacency[conn._fromLayer].append(conn._toLayer) 
-
+        in_degree = {lid: len(parents) for lid, parents in self._incoming.items()}
         queue = deque([lid for lid, deg in in_degree.items() if deg == 0])
         sorted_layers = []
+
+
 
         while queue:
             current = queue.popleft()
             sorted_layers.append(self.layers[current])
-            
-            for neighbor in adjacency[current]:  # O(1) lookup instead of scanning all edges
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
+
+            for child in self._outgoing[current]:   # O(1) lookup, no scanning , hell yeaah
+                in_degree[child] -= 1
+                if in_degree[child] == 0:
+                    queue.append(child)
+
         if len(sorted_layers) != len(self.layers):
             raise Exception("Cycle detected in network")
-        
 
         return sorted_layers
 
     def propagate_shapes(self): #this is to calculate the output shape of each layer based on the input shape and the type of the layer, we need to do this before we can do any training or inference, because we need to know the shape of the data that will be passed through the network
-     ordered = self.topological_sort()
+        ordered = self.topological_sort()
 
-     for layer in ordered:
-             if layer._isInput:
+        for layer in ordered:
+            if layer._isInput:
                 continue
 
-             parents = self.get_parents(layer._id)
+            parents = self.get_parents(layer._id)
 
-             if len(parents) != 1:
-                 raise Exception("Only single-input supported for now")
+            if len(parents) != 1:
+                raise Exception(f"Layer '{layer._id}' has {len(parents)} parents — only single-input supported for now")
 
-             parent_layer = self.layers[parents[0]]
-             
-             if parent_layer._outputShape is None:
-                raise Exception(f"Parent layer {parent_layer._id} has undefined output shape")
-             layer._outputShape = layer.getOutputShape(parent_layer._outputShape)
+            parent_layer = self.layers[parents[0]]
+
+            if parent_layer._outputShape is None:
+                raise Exception(f"Parent layer '{parent_layer._id}' has undefined output shape")
+
+            layer._outputShape = layer.getOutputShape(parent_layer._outputShape)
 
 
 
 
-    
+    def validate(self) -> bool:
+        if not self.layers:
+            return False
+
+        try:
+            self.topological_sort()
+        except Exception:
+            return False
+
+        incoming = self._incoming
+        outgoing = self._outgoing
+
+        has_input  = any(not parents  for parents  in incoming.values())
+        has_output = any(not children for children in outgoing.values())
+
+        return has_input and has_output
+
+
+    def generateSummary(self) -> dict[str, str]:
+        return {
+            "Network ID":         self.id,
+            "Total Layers":       str(len(self.layers)),
+            "Total Connections":  str(len(self.connections)),
+            "Input Layers":       ", ".join(l._id for l in self.getInputLayers()),
+            "Output Layers":      ", ".join(l._id for l in self.getOutputLayers()),
+        }
