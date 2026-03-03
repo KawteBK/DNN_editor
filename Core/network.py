@@ -1,4 +1,4 @@
-from layer import Layer
+from layer import Activation, ActivationType, Conv2D, Dense, InputLayer, Layer, Pooling, Recurrent
 from connection import Connection
 from collections import deque
 class Network:
@@ -72,7 +72,16 @@ class Network:
         self.connections.append(connection)
 
         try:
-           self.topological_sort()
+          self.topological_sort()
+
+           # Dry-run shape validation: propagate shapes, then reset any layers that were
+           # previously shapeless — so explicit propagate_shapes() stays the authoritative setter.
+          shapeless = {lid for lid, layer in self.layers.items()
+                        if layer._inputShape is None and layer._outputShape is None and not layer._isInput}
+          self.propagate_shapes()
+          for lid in shapeless:
+               self.layers[lid]._inputShape  = None
+               self.layers[lid]._outputShape = None
         except Exception:
             self._outgoing[fromLayerId].remove(toLayerId)
             self._incoming[toLayerId].remove(fromLayerId)
@@ -154,7 +163,8 @@ class Network:
 
         return sorted_layers
 
-    def propagate_shapes(self): #this is to calculate the output shape of each layer based on the input shape and the type of the layer, we need to do this before we can do any training or inference, because we need to know the shape of the data that will be passed through the network
+    def propagate_shapes(self): 
+        #this is to calculate the output shape of each layer based on the input shape and the type of the layer, we need to do this before we can do any training or inference, because we need to know the shape of the data that will be passed through the network
         ordered = self.topological_sort()
 
         for layer in ordered:
@@ -162,7 +172,8 @@ class Network:
                 continue
 
             parents = self.get_parents(layer._id)
-
+            if len(parents)==0:
+                continue
             if len(parents) != 1:
                 raise Exception(f"Layer '{layer._id}' has {len(parents)} parents — only single-input supported for now")
 
@@ -170,7 +181,7 @@ class Network:
 
             if parent_layer._outputShape is None:
                 raise Exception(f"Parent layer '{parent_layer._id}' has undefined output shape")
-
+            layer._inputShape = parent_layer._outputShape  
             layer._outputShape = layer.getOutputShape(parent_layer._outputShape)
 
 
@@ -203,56 +214,70 @@ class Network:
             "Output Layers":      ", ".join(l._id for l in self.getOutputLayers()),
         }
     
+    
+    
+    
 
  #for the deserialization of the network, we need to be able to convert it to a dictionary and back, this is for the project saving and loading, and also for the future when we want to upload networks and need to store their metadata in the project file
     @classmethod
     def fromDict(cls, data: dict) -> "Network":
         from layer import InputLayer, Dense, Conv2D, Recurrent, Pooling, Activation, ActivationType
-
+       
         if not data:
             return None
 
         network = cls(id=data["id"])
+       #becauuuuuse when saveen in json files, the outputshapesare saved as lists, but we need them to be tuples when creating the layers, so we need to convert them back to tuples, 
+        def to_tuple(val):
+            return tuple(val) if val is not None else None
 
-    # rebuild layers by type
+
+
+    # rebuilding layers by type
         for lid, ldata in data["layers"].items():
             layer_type = ldata["type"]
 
             if layer_type == "InputLayer":
-                layer = InputLayer(inputShape=tuple(ldata["outputShape"]))
+                layer = InputLayer(inputShape=to_tuple(ldata["outputShape"]))
 
             elif layer_type == "Dense":
                 layer = Dense(unit=ldata["unit"], useBias=ldata["useBias"],
-                          dropout=ldata["dropout"], id=ldata["id"],
-                          name=ldata["name"], role=ldata["role"],
-                          inputShape=ldata["inputShape"], outputShape=ldata["outputShape"])
+                              dropout=ldata["dropout"], id=ldata["id"],
+                              name=ldata["name"], role=ldata["role"])
 
             elif layer_type == "Conv2D":
-                layer = Conv2D(filters=ldata["filters"], kernelSize=tuple(ldata["kernelSize"]),
-                           strides=tuple(ldata["strides"]), padding=tuple(ldata["padding"]),
-                           dropout=ldata["dropout"], droupoutStyle=ldata["dropoutStyle"],
-                           id=ldata["id"], name=ldata["name"], role=ldata["role"],
-                           inputShape=ldata["inputShape"], outputShape=ldata["outputShape"])
+                layer = Conv2D(filters=ldata["filters"],
+                               kernelSize=tuple(ldata["kernelSize"]),
+                               strides=tuple(ldata["strides"]),
+                               padding=tuple(ldata["padding"]),
+                               dropout=ldata["dropout"],
+                               dropoutStyle=ldata["dropoutStyle"],
+                               id=ldata["id"], name=ldata["name"], role=ldata["role"])
 
             elif layer_type == "Recurrent":
-                layer = Recurrent(hiddenSize=ldata["hiddenSize"], numLayer=ldata["numLayer"],
-                              dropout=ldata["dropout"], id=ldata["id"],
-                              name=ldata["name"], role=ldata["role"],
-                              inputShape=ldata["inputShape"], outputShape=ldata["outputShape"],
-                              bidirection=ldata["bidirection"], returnSeq=ldata["returnSeq"])
+                layer = Recurrent(hiddenSize=ldata["hiddenSize"],
+                                  numLayer=ldata["numLayer"],
+                                  dropout=ldata["dropout"],
+                                  id=ldata["id"], name=ldata["name"], role=ldata["role"],
+                                  bidirection=ldata["bidirection"],
+                                  returnSeq=ldata["returnSeq"])
 
             elif layer_type == "Pooling":
-                layer = Pooling(poolSize=tuple(ldata["poolSize"]), strides=tuple(ldata["strides"]),
-                            padding=tuple(ldata["padding"]), id=ldata["id"],
-                            name=ldata["name"], role=ldata["role"],
-                            inputShape=ldata["inputShape"], outputShape=ldata["outputShape"])
+                layer = Pooling(poolSize=tuple(ldata["poolSize"]),
+                                strides=tuple(ldata["strides"]),
+                                padding=tuple(ldata["padding"]),
+                                id=ldata["id"], name=ldata["name"], role=ldata["role"])
 
             elif layer_type == "Activation":
                 layer = Activation(activationType=ActivationType(ldata["activationType"]),
-                               id=ldata["id"], name=ldata["name"], role=ldata["role"],
-                               inputShape=ldata["inputShape"], outputShape=ldata["outputShape"])
+                                   id=ldata["id"], name=ldata["name"], role=ldata["role"])
             else:
                 raise ValueError(f"Unknown layer type: {layer_type}")
+
+            # restore saved shapes directly — constructors no longer accept them
+            if layer_type != "InputLayer":
+                layer._inputShape  = to_tuple(ldata["inputShape"])
+                layer._outputShape = to_tuple(ldata["outputShape"])
 
             network.addLayer(layer)
 
@@ -261,5 +286,41 @@ class Network:
             network.addConnect(cdata["from"], cdata["to"])
 
         return network
-        
     
+
+    def toDict(self) -> dict:
+            return {
+            "id": self.id,
+        "layers": {lid: self._serializeLayer(layer) for lid, layer in self.layers.items()},
+        "connections": [
+            {"id": conn._id, "from": conn._fromLayer, "to": conn._toLayer}
+            for conn in self.connections
+        ]
+    }
+
+    def _serializeLayer(self, layer) -> dict:
+        base = {
+        "id": layer._id,
+        "name": layer._name,
+        "role": layer._role,
+        "type": type(layer).__name__,
+        "inputShape": layer._inputShape,
+        "outputShape": layer._outputShape,
+         }
+        if isinstance(layer, Dense):
+            base.update({"unit": layer._unit, "useBias": layer._useBias,
+                     "dropout": layer._dropout})
+        elif isinstance(layer, Conv2D):
+            base.update({"filters": layer._filters, "kernelSize": layer._kernelSize,
+                     "strides": layer._strides, "padding": layer._padding,
+                     "dropout": layer._dropout, "dropoutStyle": layer._dropoutStyle})
+        elif isinstance(layer, Recurrent):
+            base.update({"hiddenSize": layer._hiddenSize, "numLayer": layer._numLayer,
+                     "dropout": layer._dropout, "bidirection": layer._bidirection,
+                     "returnSeq": layer._returnSeq})
+        elif isinstance(layer, Pooling):
+            base.update({"poolSize": layer._poolSize, "strides": layer._strides,
+                     "padding": layer._padding})
+        elif isinstance(layer, Activation):
+            base.update({"activationType": layer._activationType.value})
+        return base

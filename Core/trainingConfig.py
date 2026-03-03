@@ -10,11 +10,11 @@ class TrainingConfig:
 
     def toDict(self) -> dict:
         return {
-            "batchSize": self.batchSize,
-            "epochs": self.epochs,
-            "validationSplit": self.validationSplit,
-            "shuffle": self.shuffle,
-            "earlyStopping": self.earlyStopping,
+            "batchSize": self._batchSize,
+            "epochs": self._epochs,
+            "validationSplit": self._validationSplit,
+            "shuffle": self._shuffle,
+            "earlyStop": self._earlyStop,
         }
 
     @classmethod
@@ -24,6 +24,6 @@ class TrainingConfig:
             epochs=data["epochs"],
             validationSplit=data["validationSplit"],
             shuffle=data["shuffle"],
-            earlyStopping=data["earlyStopping"],
+            earlyStop=data["earlyStop"],
         )
 
