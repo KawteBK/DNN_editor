@@ -16,4 +16,31 @@ class Dataset:
         if self._numClasses < 1:
             return False
         return True
+
+
+    #for the serialization and deserialization of the dataset, we need to be able to convert it to a dictionary and back, this is for the project saving and loading, and also for the future when we want to upload datasets and need to store their metadata in the project file
+    def toDict(self) -> dict:
+        return {
+            "id": self._id,
+            "name": self._name,
+            "inputShape": list(self._inputShape),
+            "numClasses": self._numClasses,
+            # "trainPath": self._trainPath,
+            # "valPath": self._valPath,
+            # "testPath": self._testPath,
+        }
+
+    @classmethod
+    def fromDict(cls, data: dict) -> "Dataset":
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            inputShape=tuple(data["inputShape"]),
+            numClasses=data["numClasses"],
+            # trainPath=data.get("trainPath"),
+            # valPath=data.get("valPath"),
+            # testPath=data.get("testPath"),
+        )
+
+    
        

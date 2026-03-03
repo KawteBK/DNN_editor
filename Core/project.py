@@ -89,51 +89,64 @@ class Project:
         return self.network is not None and self.network.validate()
 
     # Private serialization helpers 
-
     def _serializeNetwork(self) -> dict:
         if self.network is None:
-            return {}
+         return {}
         return {
             "id": self.network.id,
-            "layers": {
-                lid: {
-                    "id": layer._id,
-                    "name": layer._name,
-                    "role": layer._role,
-                    "type": type(layer).__name__,
-                    "inputShape": layer._inputShape,
-                    "outputShape": layer._outputShape,
-                }
-                for lid, layer in self.network.layers.items()
-            },
-            "connections": [
-                {"id": conn._id, "from": conn._fromLayer, "to": conn._toLayer}
-                for conn in self.network.connections
-            ]
-        }
+         "layers": {lid: self._serializeLayer(layer) 
+                   for lid, layer in self.network.layers.items()},
+        "connections": [
+            {"id": conn._id, "from": conn._fromLayer, "to": conn._toLayer}
+            for conn in self.network.connections
+        ]
+    }
 
-    def _serializeDataset(self) -> dict:
-        if self.dataset is None:
-            return {}
-        return {
-            "id": self.dataset.id,
-            "name": self.dataset.name,
-            "trainPath": self.dataset.trainPath,
-            "valPath": self.dataset.valPath,
-            "testPath": self.dataset.testPath,
-            "inputShape": self.dataset.inputShape,
-            "numClasses": self.dataset.numClasses,
-        }
+    def _serializeLayer(self, layer) -> dict:
+        from layer import Dense, Conv2D, Recurrent, Pooling, Activation
+
+        base = {
+         "id": layer._id,
+         "name": layer._name,
+         "role": layer._role,
+        "type": type(layer).__name__,
+        "inputShape": layer._inputShape,
+        "outputShape": layer._outputShape,
+ }
+
+        if isinstance(layer, Dense):
+           base.update({"unit": layer._unit, "useBias": layer._useBias, 
+                     "dropout": layer._dropout})
+
+        elif isinstance(layer, Conv2D):
+           base.update({"filters": layer._filters, "kernelSize": layer._kernelSize,
+                     "strides": layer._strides, "padding": layer._padding,
+                     "dropout": layer._dropout, "dropoutStyle": layer._dropoutStyle})
+
+        elif isinstance(layer, Recurrent):
+            base.update({"hiddenSize": layer._hiddenSize, "numLayer": layer._numLayer,
+                     "dropout": layer._dropout, "bidirection": layer._bidirection,
+                     "returnSeq": layer._returnSeq})
+
+        elif isinstance(layer, Pooling):
+            base.update({"poolSize": layer._poolSize, "strides": layer._strides,
+                     "padding": layer._padding})
+
+        elif isinstance(layer, Activation):
+            base.update({"activationType": layer._activationType.value})
+
+        return base
+      
 
     def _serializeTrainingConfig(self) -> dict:
         if self.trainingConfig is None:
             return {}
         return {
-            "batchSize": self.trainingConfig.batchSize,
-            "epochs": self.trainingConfig.epochs,
-            "validationSplit": self.trainingConfig.validationSplit,
-            "shuffle": self.trainingConfig.shuffle,
-            "earlyStopping": self.trainingConfig.earlyStopping,
+            "batchSize": self.trainingConfig._batchSize,
+            "epochs": self.trainingConfig._epochs,
+            "validationSplit": self.trainingConfig._validationSplit,
+            "shuffle": self.trainingConfig._shuffle,
+            "earlyStopping": self.trainingConfig._earlyStop,
         }
 
     def _serializeNetworkConfig(self) -> dict:

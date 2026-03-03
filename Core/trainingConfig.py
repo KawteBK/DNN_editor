@@ -7,3 +7,23 @@ class TrainingConfig:
         self._shuffle = shuffle
         self._earlyStop = earlyStop
 
+
+    def toDict(self) -> dict:
+        return {
+            "batchSize": self.batchSize,
+            "epochs": self.epochs,
+            "validationSplit": self.validationSplit,
+            "shuffle": self.shuffle,
+            "earlyStopping": self.earlyStopping,
+        }
+
+    @classmethod
+    def fromDict(cls, data: dict) -> "TrainingConfig":
+        return cls(
+            batchSize=data["batchSize"],
+            epochs=data["epochs"],
+            validationSplit=data["validationSplit"],
+            shuffle=data["shuffle"],
+            earlyStopping=data["earlyStopping"],
+        )
+

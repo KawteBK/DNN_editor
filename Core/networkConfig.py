@@ -24,3 +24,21 @@ class NetworkConfig:
         self._loss = loss
         self._metric = metric
         self._learningRate=learningRate
+
+
+    def toDict(self) -> dict:
+        return {
+            "optimizer": self._optimizer.value,
+            "loss": self._loss.value,
+            "metrics": [m.value for m in self._metric],
+            "learningRate": self._learningRate,
+        }
+
+    @classmethod
+    def fromDict(cls, data: dict) -> "NetworkConfig":
+        return cls(
+            optimizer=OptimizerType(data["optimizer"]),
+            loss=LossType(data["loss"]),
+            metric=[MetricType(m) for m in data["metrics"]],
+            learningRate=data["learningRate"],
+        )

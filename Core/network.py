@@ -202,3 +202,64 @@ class Network:
             "Input Layers":       ", ".join(l._id for l in self.getInputLayers()),
             "Output Layers":      ", ".join(l._id for l in self.getOutputLayers()),
         }
+    
+
+ #for the deserialization of the network, we need to be able to convert it to a dictionary and back, this is for the project saving and loading, and also for the future when we want to upload networks and need to store their metadata in the project file
+    @classmethod
+    def fromDict(cls, data: dict) -> "Network":
+        from layer import InputLayer, Dense, Conv2D, Recurrent, Pooling, Activation, ActivationType
+
+        if not data:
+            return None
+
+        network = cls(id=data["id"])
+
+    # rebuild layers by type
+        for lid, ldata in data["layers"].items():
+            layer_type = ldata["type"]
+
+            if layer_type == "InputLayer":
+                layer = InputLayer(inputShape=tuple(ldata["outputShape"]))
+
+            elif layer_type == "Dense":
+                layer = Dense(unit=ldata["unit"], useBias=ldata["useBias"],
+                          dropout=ldata["dropout"], id=ldata["id"],
+                          name=ldata["name"], role=ldata["role"],
+                          inputShape=ldata["inputShape"], outputShape=ldata["outputShape"])
+
+            elif layer_type == "Conv2D":
+                layer = Conv2D(filters=ldata["filters"], kernelSize=tuple(ldata["kernelSize"]),
+                           strides=tuple(ldata["strides"]), padding=tuple(ldata["padding"]),
+                           dropout=ldata["dropout"], droupoutStyle=ldata["dropoutStyle"],
+                           id=ldata["id"], name=ldata["name"], role=ldata["role"],
+                           inputShape=ldata["inputShape"], outputShape=ldata["outputShape"])
+
+            elif layer_type == "Recurrent":
+                layer = Recurrent(hiddenSize=ldata["hiddenSize"], numLayer=ldata["numLayer"],
+                              dropout=ldata["dropout"], id=ldata["id"],
+                              name=ldata["name"], role=ldata["role"],
+                              inputShape=ldata["inputShape"], outputShape=ldata["outputShape"],
+                              bidirection=ldata["bidirection"], returnSeq=ldata["returnSeq"])
+
+            elif layer_type == "Pooling":
+                layer = Pooling(poolSize=tuple(ldata["poolSize"]), strides=tuple(ldata["strides"]),
+                            padding=tuple(ldata["padding"]), id=ldata["id"],
+                            name=ldata["name"], role=ldata["role"],
+                            inputShape=ldata["inputShape"], outputShape=ldata["outputShape"])
+
+            elif layer_type == "Activation":
+                layer = Activation(activationType=ActivationType(ldata["activationType"]),
+                               id=ldata["id"], name=ldata["name"], role=ldata["role"],
+                               inputShape=ldata["inputShape"], outputShape=ldata["outputShape"])
+            else:
+                raise ValueError(f"Unknown layer type: {layer_type}")
+
+            network.addLayer(layer)
+
+        # rebuild connections
+        for cdata in data["connections"]:
+            network.addConnect(cdata["from"], cdata["to"])
+
+        return network
+        
+    
