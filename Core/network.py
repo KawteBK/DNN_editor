@@ -1,4 +1,5 @@
-from layer import Activation, ActivationType, Conv2D, Dense, InputLayer, Layer, Pooling, Recurrent
+from layer import (Activation, ActivationType, Conv2D, DropoutStyle,Dense, Flatten, InputLayer, Layer,
+                   Pooling, PoolingType, Recurrent, RecurrentType)
 from connection import Connection
 from collections import deque
 class Network:
@@ -240,33 +241,48 @@ class Network:
             if layer_type == "InputLayer":
                 layer = InputLayer(inputShape=to_tuple(ldata["outputShape"]))
 
+            elif layer_type == "Flatten":
+                layer = Flatten(id=ldata["id"], name=ldata["name"], role=ldata["role"])
+
+
             elif layer_type == "Dense":
                 layer = Dense(unit=ldata["unit"], useBias=ldata["useBias"],
                               dropout=ldata["dropout"], id=ldata["id"],
                               name=ldata["name"], role=ldata["role"])
+            
 
             elif layer_type == "Conv2D":
-                layer = Conv2D(filters=ldata["filters"],
-                               kernelSize=tuple(ldata["kernelSize"]),
-                               strides=tuple(ldata["strides"]),
-                               padding=tuple(ldata["padding"]),
-                               dropout=ldata["dropout"],
-                               dropoutStyle=ldata["dropoutStyle"],
-                               id=ldata["id"], name=ldata["name"], role=ldata["role"])
+                raw_ds = ldata.get("dropoutStyle")
+                dropout_style = DropoutStyle(raw_ds) if raw_ds else None
+                layer = Conv2D(
+                    filters=ldata["filters"],
+                    kernelSize=tuple(ldata["kernelSize"]),
+                    strides=tuple(ldata["strides"]),
+                    padding=tuple(ldata["padding"]),
+                    dropout=ldata["dropout"],
+                    dropoutStyle=dropout_style,
+                    id=ldata["id"], name=ldata["name"], role=ldata["role"],
+                )
 
             elif layer_type == "Recurrent":
-                layer = Recurrent(hiddenSize=ldata["hiddenSize"],
-                                  numLayer=ldata["numLayer"],
-                                  dropout=ldata["dropout"],
-                                  id=ldata["id"], name=ldata["name"], role=ldata["role"],
-                                  bidirection=ldata["bidirection"],
-                                  returnSeq=ldata["returnSeq"])
+                layer = Recurrent(
+                    hiddenSize=ldata["hiddenSize"],
+                    numLayer=ldata["numLayer"],
+                    dropout=ldata["dropout"],
+                    id=ldata["id"], name=ldata["name"], role=ldata["role"],
+                    bidirection=ldata["bidirection"],
+                    returnSeq=ldata["returnSeq"],
+                    recurrentType=RecurrentType(ldata.get("recurrentType", "lstm")),
+                )
 
             elif layer_type == "Pooling":
-                layer = Pooling(poolSize=tuple(ldata["poolSize"]),
-                                strides=tuple(ldata["strides"]),
-                                padding=tuple(ldata["padding"]),
-                                id=ldata["id"], name=ldata["name"], role=ldata["role"])
+                layer = Pooling(
+                    poolSize=tuple(ldata["poolSize"]),
+                    strides=tuple(ldata["strides"]),
+                    padding=tuple(ldata["padding"]),
+                    id=ldata["id"], name=ldata["name"], role=ldata["role"],
+                    poolingType=PoolingType(ldata.get("poolingType", "max")),
+                )
 
             elif layer_type == "Activation":
                 layer = Activation(activationType=ActivationType(ldata["activationType"]),
@@ -274,14 +290,13 @@ class Network:
             else:
                 raise ValueError(f"Unknown layer type: {layer_type}")
 
-            # restore saved shapes directly — constructors no longer accept them
+             # restore saved shapes (skip InputLayer — its shape is set in the constructor)
             if layer_type != "InputLayer":
-                layer._inputShape  = to_tuple(ldata["inputShape"])
-                layer._outputShape = to_tuple(ldata["outputShape"])
+                layer._inputShape  = to_tuple(ldata.get("inputShape"))
+                layer._outputShape = to_tuple(ldata.get("outputShape"))
 
             network.addLayer(layer)
 
-        # rebuild connections
         for cdata in data["connections"]:
             network.addConnect(cdata["from"], cdata["to"])
 
@@ -307,20 +322,50 @@ class Network:
         "inputShape": layer._inputShape,
         "outputShape": layer._outputShape,
          }
-        if isinstance(layer, Dense):
-            base.update({"unit": layer._unit, "useBias": layer._useBias,
-                     "dropout": layer._dropout})
+        if isinstance(layer, InputLayer):
+            pass   # no extra fields needed outputShape already in base
+
+        elif isinstance(layer, Flatten):
+            pass   # no parameters shape is computed automatically
+
+        elif isinstance(layer, Dense):
+            base.update({
+                "unit":    layer._unit,
+                "useBias": layer._useBias,
+                "dropout": layer._dropout,
+            })
+
         elif isinstance(layer, Conv2D):
-            base.update({"filters": layer._filters, "kernelSize": layer._kernelSize,
-                     "strides": layer._strides, "padding": layer._padding,
-                     "dropout": layer._dropout, "dropoutStyle": layer._dropoutStyle})
+            base.update({
+                "filters":      layer._filters,
+                "kernelSize":   layer._kernelSize,
+                "strides":      layer._strides,
+                "padding":      layer._padding,
+                "dropout":      layer._dropout,
+                "dropoutStyle": layer._dropoutStyle.value if layer._dropoutStyle else None,
+            })
+
         elif isinstance(layer, Recurrent):
-            base.update({"hiddenSize": layer._hiddenSize, "numLayer": layer._numLayer,
-                     "dropout": layer._dropout, "bidirection": layer._bidirection,
-                     "returnSeq": layer._returnSeq})
+            base.update({
+                "hiddenSize":    layer._hiddenSize,
+                "numLayer":      layer._numLayer,
+                "dropout":       layer._dropout,
+                "bidirection":   layer._bidirection,
+                "returnSeq":     layer._returnSeq,
+                "recurrentType": layer._recurrentType.value,
+            })
+
         elif isinstance(layer, Pooling):
-            base.update({"poolSize": layer._poolSize, "strides": layer._strides,
-                     "padding": layer._padding})
+            base.update({
+                "poolSize":    layer._poolSize,
+                "strides":     layer._strides,
+                "padding":     layer._padding,
+                "poolingType": layer._poolingType.value,
+            })
+
         elif isinstance(layer, Activation):
-            base.update({"activationType": layer._activationType.value})
+            base.update({
+                "activationType": layer._activationType.value,
+            })
+
         return base

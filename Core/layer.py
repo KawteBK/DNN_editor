@@ -1,4 +1,5 @@
 #girl, woman, person, WE NEED TO ADDA FLATTEN LAYER, fuuuuck, and i thought i was done adding layer
+from enum import Enum
 class Layer:
 
     #i removed the input and output shape from the construction cuz they'll be calculated automatically based on the previous layer and the layer type
@@ -51,7 +52,9 @@ class Dense(Layer):
 
 
 
-
+class DropoutStyle(Enum):
+    STANDARD = "standard"   # nn.Dropout 
+    SPATIAL  = "spatial"    # nn.Dropout2d 
 class Conv2D(Layer):
     def __init__(self, filters, kernelSize, strides, padding, dropout, dropoutStyle,id, name, role) -> None:
         super().__init__(id, name, role)
@@ -83,18 +86,21 @@ class Conv2D(Layer):
 
 
 
-
+class RecurrentType(Enum):
+    LSTM = "lstm"
+    GRU  = "gru"
 
 
 class Recurrent(Layer):
-    def __init__(self,hiddenSize , numLayer,dropout,id, name, role, bidirection, returnSeq) -> None:
+    def __init__(self,hiddenSize , numLayer,dropout,id, name, role, bidirection, returnSeq,recurrentType:RecurrentType= RecurrentType.LSTM) -> None:
         super().__init__(id, name, role)      #numLayer is the number of layers in the reccurent block (for example if you have 2 LSTM layers in the block numLayer=2)
         self._hiddenSize=hiddenSize
-        self._numLayer=numLayer
+        self._numLayer=numLayer  # stacked layers inside the recurrent block
         self._dropout=dropout
         self._bidirection=bidirection
         self._returnSeq=returnSeq
-       
+        self._recurrentType = recurrentType
+
 
     def getOutputShape(self, inputShape): 
 
@@ -121,12 +127,17 @@ class Recurrent(Layer):
 
 
 
+class PoolingType(Enum):
+    MAX     = "max"
+    AVERAGE = "average"
 class Pooling(Layer): #this will handle only 2D pooling for now, we will add 1D and 3D pooling later, if we have time
-    def __init__(self, poolSize, strides, padding,id, name, role) -> None:
+    def __init__(self, poolSize, strides, padding,id, name, role ,
+                 poolingType: PoolingType = PoolingType.MAX) -> None:
         super().__init__(id, name, role)
         self._poolSize=poolSize
         self._strides=strides
         self._padding=padding
+        self._poolingType=poolingType
 
 #the inputshape should be (C, H, W) and the output shape should be (C, H_out, W_out)
     def getOutputShape(self, inputShape):
@@ -139,7 +150,22 @@ class Pooling(Layer): #this will handle only 2D pooling for now, we will add 1D 
         
      
 
+class Flatten(Layer):
+    """Collapses any multi-dimensional input (C, H, W) → (C*H*W,).
+    This is the bridge layer required between Conv2D/Pooling and Dense.
+    """
+    def __init__(self, id, name, role=None):
+        super().__init__(id, name, role)
 
+    def getOutputShape(self, inputShape):
+        if len(inputShape) == 1:
+            # already flat — pass through (valid, just a no-op)
+            return inputShape
+        # product of all dims → 1D
+        flat_size = 1
+        for dim in inputShape:
+            flat_size *= dim
+        return (flat_size,)
 
 
 
