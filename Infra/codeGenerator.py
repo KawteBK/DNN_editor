@@ -1,4 +1,4 @@
-from project import Project
+from Core.project import Project
 
 
 # Canonical normalization stats — mirrored from pytorch_datasets.py
