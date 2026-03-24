@@ -3,10 +3,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from project import Project
-from networkConfig import OptimizerType, LossType, MetricType
-from pytorch_model_builder import PyTorchModelBuilder
-from pytorch_datasets import PyTorchDatasets
+from Core.project import Project
+from Core.networkConfig import OptimizerType, LossType, MetricType
+from .PytorchModelBuilder import PyTorchModelBuilder
+from .pytorchDataset import PyTorchDatasets
 
 
 class PyTorchTrainer:

@@ -2,8 +2,8 @@ import os #yeah for file operations, creating folders type shit
 from torch.utils.data import DataLoader, random_split #data loader is for loading datasets in batches (tgasmhoum not load everything at once) and random_split is for splitting the dataset into train and validation sets
 from torchvision import datasets, transforms #transform is for transforming images before training
 
-from dataset import Dataset, DatasetSource, BuiltinDataset
-from trainingConfig import TrainingConfig
+from Core.dataset import Dataset, DatasetSource, BuiltinDataset
+from Core.trainingConfig import TrainingConfig
 
 
 # Per-dataset normalization stats (mean, std).

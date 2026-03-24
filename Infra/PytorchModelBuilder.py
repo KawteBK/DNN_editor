@@ -1,6 +1,6 @@
 import torch.nn as nn # what i want to know in all this, where is the forward function and how is it implemented ???
 
-from layer import (
+from Core.layer import (
     Activation, ActivationType,
     Conv2D, DropoutStyle,
     Dense,
@@ -9,7 +9,7 @@ from layer import (
     Pooling, PoolingType,
     Recurrent, RecurrentType,
 )
-from network import Network
+from Core.network import Network
 
 
 # ── Inner wrapper , lives here, not in layer.py 

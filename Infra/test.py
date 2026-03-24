@@ -30,10 +30,10 @@ from Core.networkConfig import NetworkConfig, OptimizerType, LossType, MetricTyp
 from Core.project import Project
 
 # ── infrastructure imports ────────────────────────────────────────────────────
-from PytorchModelBuilder import PyTorchModelBuilder, RecurrentWrapper
-from pytorchDataset import PyTorchDatasets
-from trainer import PyTorchTrainer
-from codeGenerator import PyTorchCodeGenerator
+from .PytorchModelBuilder import PyTorchModelBuilder, RecurrentWrapper
+from .pytorchDataset import PyTorchDatasets
+from .trainer import PyTorchTrainer
+from .codeGenerator import PyTorchCodeGenerator
 
 # ── test harness ──────────────────────────────────────────────────────────────
 passed = 0
