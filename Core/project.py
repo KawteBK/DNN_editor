@@ -1,8 +1,8 @@
 from __future__ import annotations
-from network import Network
-from dataset import Dataset
-from trainingConfig import TrainingConfig
-from networkConfig import NetworkConfig
+from .network import Network
+from .dataset import Dataset
+from .trainingConfig import TrainingConfig
+from .networkConfig import NetworkConfig
 
 
 class Project:

@@ -1,274 +1,470 @@
-import torch.nn as nn
-
-from layer import (
-    Activation, ActivationType,
-    Conv2D, DropoutStyle,
-    Dense,
-    Flatten,
-    InputLayer,
-    Pooling, PoolingType,
-    Recurrent, RecurrentType,
-)
-from network import Network
+from project import Project
 
 
-# ── Inner wrapper , lives here, not in layer.py 
+# Canonical normalization stats — mirrored from pytorch_datasets.py
+# so the generated file is fully self-contained (no imports from your codebase)
+_NORM_STATS = {
+    "mnist":         ((0.1307,),                     (0.3081,)),
+    "fashion_mnist": ((0.2860,),                     (0.3530,)),
+    "kmnist":        ((0.1918,),                     (0.3483,)),
+    "cifar10":       ((0.4914, 0.4822, 0.4465),      (0.2470, 0.2435, 0.2616)),
+    "cifar100":      ((0.5071, 0.4867, 0.4408),      (0.2675, 0.2565, 0.2761)),
+    "svhn":          ((0.4377, 0.4438, 0.4728),      (0.1980, 0.2010, 0.1970)),
+    "stl10":         ((0.4467, 0.4398, 0.4066),      (0.2242, 0.2215, 0.2239)),
+}
 
-class RecurrentWrapper(nn.Module):
-    """
-    Wraps nn.LSTM or nn.GRU so it can live inside nn.Sequential.
+_TORCHVISION_CLASS = {
+    "mnist":         "datasets.MNIST",
+    "fashion_mnist": "datasets.FashionMNIST",
+    "kmnist":        "datasets.KMNIST",
+    "cifar10":       "datasets.CIFAR10",
+    "cifar100":      "datasets.CIFAR100",
+    "svhn":          "datasets.SVHN",
+    "stl10":         "datasets.STL10",
+}
 
-    The problem: PyTorch's LSTM/GRU return (output, hidden_state) — a tuple.
-    nn.Sequential blindly passes whatever it receives to the next layer, so
-    the next layer would receive a tuple instead of a tensor and crash.
-
-    This wrapper:
-      1. Calls the inner RNN and unpacks the tuple.
-      2. Applies returnSeq logic:
-           returnSeq=True  → return all timesteps  [batch, seq_len, hidden]
-           returnSeq=False → return last timestep only  [batch, hidden]
-         This matches exactly what Recurrent.getOutputShape() already promises.
-    """
-
-    def __init__(self, rnn: nn.Module, returnSeq: bool):
-        super().__init__()
-        self.rnn = rnn
-        self.returnSeq = returnSeq
-
-    def forward(self, x):
-        output, _ = self.rnn(x)   # _ discards (h_n, c_n) for LSTM or h_n for GRU
-        if self.returnSeq:
-            return output          # [batch, seq_len, hidden_size]
-        else:
-            return output[:, -1, :]  # [batch, hidden_size] — last timestep only
+# SVHN and STL10 use split= instead of train=
+_SPLIT_KWARG = {"svhn", "stl10"}
 
 
-# ─ Main builder 
+class PyTorchCodeGenerator:
 
-class PyTorchModelBuilder:
-
-    # ─ public 
+    # ── public
     @staticmethod
-    def build(network: Network) -> nn.Module:
+    def generate(project: Project) -> str:
         """
-        Converts the Network abstraction into a PyTorch nn.Module.
+        Main entry point. Takes a Project, returns a complete Python file
+        as a string. Write it to disk with:
 
-        Steps:
-          1. Call network.topological_sort() — gets layers in execution order
-          2. Skip InputLayer — it's a shape anchor, not a real PyTorch layer
-          3. Call _build_module() on each remaining layer → list of nn.Modules
-          4. Flatten all those lists into one sequence
-          5. Wrap in nn.Sequential and return
+            code = PyTorchCodeGenerator.generate(project)
+            with open("generated_model.py", "w") as f:
+                f.write(code)
 
-        The returned model accepts batches of shape
-        (batch_size, *inputLayer._outputShape) and is ready to pass to the trainer.
+        The output file has zero dependencies on the codebase  it only
+        needs torch and torchvision installed.
         """
-        if not network.validate():
-            raise ValueError("Network is invalid — call network.validate() before building.")
+        project.network.propagate_shapes()
 
-        # Make sure shapes are propagated (safe to call multiple times)
-        network.propagate_shapes()
+    # grab order from live object before serializing
+        ordered_ids = [layer._id for layer in project.network.topological_sort()]
 
-        ordered = network.topological_sort()
-        modules = []
+        data = project.toDict()
+        data["network"] = project.network.toDict()
+        data["_ordered_ids"] = ordered_ids   # _gen_model reads this
+      
 
-        for layer in ordered:
-            if isinstance(layer, InputLayer):
-                continue   # not a real layer ;just tells us the input shape
-
-            layer_modules = PyTorchModelBuilder._build_module(layer)
-            modules.extend(layer_modules)
-
-        if not modules:
-            raise ValueError("Network produced no PyTorch modules after skipping InputLayer.")
-
-        return nn.Sequential(*modules)
-
-    #  private dispatcher 
-
-    @staticmethod
-    def _build_module(layer) -> list[nn.Module]:
-        """
-        Dispatcher — routes each layer type to the right builder method.
-
-        Returns a LIST of nn.Modules, not a single one, because some layers
-        expand into two (e.g. Conv2D with dropout → [nn.Conv2d, nn.Dropout2d]).
-        Keeping the return type consistent (always a list) means build() can
-        just call .extend() on every result without any special casing.
-        """
-        if isinstance(layer, Dense):
-            return PyTorchModelBuilder._build_dense(layer)
-
-        elif isinstance(layer, Conv2D):
-            return PyTorchModelBuilder._build_conv2d(layer)
-
-        elif isinstance(layer, Recurrent):
-            return PyTorchModelBuilder._build_recurrent(layer)
-
-        elif isinstance(layer, Pooling):
-            return PyTorchModelBuilder._build_pooling(layer)
-
-        elif isinstance(layer, Flatten):
-            return PyTorchModelBuilder._build_flatten(layer)
-
-        elif isinstance(layer, Activation):
-            return PyTorchModelBuilder._build_activation(layer)
-
-        else:
-            raise ValueError(f"Unknown layer type: {type(layer).__name__}")
-
-    # ── per-type builders 
-
-    @staticmethod
-    def _build_dense(layer: Dense) -> list[nn.Module]:
-        """
-        Dense → nn.Linear, optionally followed by nn.Dropout.
-
-        layer._unit     → out_features
-        layer._useBias  → bias (True/False)
-        layer._dropout  → dropout probability (0.0 means no dropout layer added)
-
-        in_features is read from layer._inputShape[0], which was set by
-        network.propagate_shapes() before build() ran.
-        """
-        in_features = layer._inputShape[0]
-        modules = [nn.Linear(in_features, layer._unit, bias=layer._useBias)]
-
-        if layer._dropout and layer._dropout > 0.0:
-            modules.append(nn.Dropout(p=layer._dropout))
-
-        return modules
-
-    @staticmethod
-    def _build_conv2d(layer: Conv2D) -> list[nn.Module]:
-        """
-        Conv2D → nn.Conv2d, optionally followed by nn.Dropout or nn.Dropout2d.
-
-        layer._filters      → out_channels
-        layer._kernelSize   → kernel_size  (tuple e.g. (3,3))
-        layer._strides      → stride
-        layer._padding      → padding
-        layer._dropout      → dropout probability
-        layer._dropoutStyle → DropoutStyle.STANDARD → nn.Dropout
-                              DropoutStyle.SPATIAL  → nn.Dropout2d
-                              None                  → no dropout
-
-        in_channels comes from layer._inputShape[0]  (C in C,H,W).
-        """
-        in_channels = layer._inputShape[0]
-        modules = [
-            nn.Conv2d(
-                in_channels=in_channels,
-                out_channels=layer._filters,
-                kernel_size=layer._kernelSize,
-                stride=layer._strides,
-                padding=layer._padding,
-            )
+        sections = [
+            PyTorchCodeGenerator._gen_header(data),
+            PyTorchCodeGenerator._gen_imports(data),
+            PyTorchCodeGenerator._gen_recurrent_wrapper(data),
+            PyTorchCodeGenerator._gen_model(data),
+            PyTorchCodeGenerator._gen_dataset(data),
+            PyTorchCodeGenerator._gen_training(data),
+            PyTorchCodeGenerator._gen_main(data),
         ]
 
-        if layer._dropout and layer._dropout > 0.0 and layer._dropoutStyle is not None:
-            if layer._dropoutStyle == DropoutStyle.SPATIAL:
-                modules.append(nn.Dropout2d(p=layer._dropout))
-            else:
-                modules.append(nn.Dropout(p=layer._dropout))
+        # Filter empty sections (e.g. no recurrent layers → no wrapper class)
+        return "\n\n\n".join(s for s in sections if s.strip()) # strip removes whitespaces and empty stuff from a string, if after removing those nothing remains, empty shit baby, move on
 
-        return modules
+    # ── file-level sections ───
 
     @staticmethod
-    def _build_recurrent(layer: Recurrent) -> list[nn.Module]:
+    def _gen_header(data: dict) -> str:
         """
-        Recurrent → RecurrentWrapper(nn.LSTM or nn.GRU).
-
-        Always returns a single-item list containing the wrapper — the wrapper
-        itself handles returnSeq logic and tuple unpacking (see RecurrentWrapper).
-
-        layer._hiddenSize  → hidden_size
-        layer._numLayer    → num_layers  (stacked RNN layers inside the block)
-        layer._dropout     → dropout between stacked layers (only active if numLayer > 1)
-        layer._bidirection → bidirectional
-        layer._returnSeq   → passed to RecurrentWrapper
-        layer._recurrentType → LSTM or GRU
-
-        batch_first=True is set so the tensor shape is (batch, seq_len, features)
-        which matches the (seq_len, features) convention in your abstraction
-        once a batch dimension is prepended — without this PyTorch expects
-        (seq_len, batch, features) and your shape math breaks.
+        Top-of-file comment block. Records the project name and all
+        hyperparameters so the generated file is self-documenting.
         """
-        input_size = layer._inputShape[1]   # inputShape is (seq_len, features) → features
+        tc = data.get("trainingConfig", {})
+        nc = data.get("networkConfig", {})
+        ds = data.get("dataset", {})
 
-        rnn_kwargs = dict(
-            input_size=input_size,
-            hidden_size=layer._hiddenSize,
-            num_layers=layer._numLayer,
-            batch_first=True,
-            dropout=layer._dropout if layer._numLayer > 1 else 0.0,
-            bidirectional=layer._bidirection,
+        lines = [
+            "# ── Generated by NNDL Code Generator ─────────────────────────────",
+            f"# Project   : {data.get('name', 'unnamed')}",
+            f"# Dataset   : {ds.get('name', '?')}  "
+            f"({ds.get('numClasses', '?')} classes, input {ds.get('inputShape', '?')})",
+            f"# Optimizer : {nc.get('optimizer', '?')}  lr={nc.get('learningRate', '?')}",
+            f"# Loss      : {nc.get('loss', '?')}",
+            f"# Epochs    : {tc.get('epochs', '?')}  "
+            f"batch={tc.get('batchSize', '?')}  "
+            f"val_split={tc.get('validationSplit', '?')}",
+            "# ──────────────────────────────────────────────────────────────────",
+        ]
+        return "\n".join(lines)
+
+    @staticmethod
+    def _gen_imports(data: dict) -> str:
+        """
+        Builds the import block. Inspects the network to only import
+        what's actually used — e.g. won't import torchvision if it's
+        a custom dataset, won't import nn.LSTM if there's no recurrent layer.
+        """
+        network = data.get("network", {})
+        layer_types = {l["type"] for l in network.get("layers", {}).values()}
+        dataset = data.get("dataset", {})
+
+        lines = [
+            "import torch",
+            "import torch.nn as nn",
+            "import torch.optim as optim",
+            "from torch.utils.data import DataLoader, random_split",
+        ]
+
+        # Only import torchvision for built-in datasets
+        if dataset.get("source") == "builtin":
+            lines.append("from torchvision import datasets, transforms")
+
+        lines.append("")  # blank line before sklearn metrics if needed
+
+        nc = data.get("networkConfig", {})
+        metrics = nc.get("metrics", [])
+        if any(m in metrics for m in ["f1_score", "precision", "recall"]):
+            lines.append("from sklearn.metrics import f1_score, precision_score, recall_score")
+
+        return "\n".join(lines)
+
+    @staticmethod
+    def _gen_recurrent_wrapper(data: dict) -> str:
+        """
+        Emits the RecurrentWrapper class only if the network contains
+        at least one Recurrent layer. Without this wrapper, LSTM/GRU
+        can't live inside nn.Sequential because they return tuples.
+        """
+        network = data.get("network", {})
+        has_recurrent = any(
+            l["type"] == "Recurrent"
+            for l in network.get("layers", {}).values()
+        )
+        if not has_recurrent:
+            return ""
+
+        return '''\
+class RecurrentWrapper(nn.Module):
+    """Unwraps the (output, hidden) tuple that LSTM/GRU return
+    so the result can flow into the next layer in nn.Sequential."""
+
+    def __init__(self, rnn, return_seq: bool):
+        super().__init__()
+        self.rnn = rnn
+        self.return_seq = return_seq
+
+    def forward(self, x):
+        output, _ = self.rnn(x)
+        return output if self.return_seq else output[:, -1, :]'''
+
+    @staticmethod
+    def _gen_model(data: dict) -> str:
+        """
+        Generates the Model class.
+
+        Walks layers in topological order (reconstructed from the connections
+        list), skips InputLayer, and calls _layer_to_code() on each one.
+        The result is an nn.Sequential assembled inside __init__.
+        """
+        network = data.get("network", {})
+        layers_dict = network.get("layers", {})
+        ordered_ids = data["_ordered_ids"]
+
+        module_lines = []
+        for lid in ordered_ids:
+            ldata = layers_dict[lid]
+            if ldata["type"] == "InputLayer":
+                continue
+            code = PyTorchCodeGenerator._layer_to_code(ldata)
+            if code:  # Activation(LINEAR) returns empty string
+                module_lines.append(f"            {code},  # {ldata['name']}")
+
+        modules_block = "\n".join(module_lines)
+
+        return f'''\
+class Model(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.net = nn.Sequential(
+{modules_block}
         )
 
-        if layer._recurrentType == RecurrentType.GRU:
-            rnn = nn.GRU(**rnn_kwargs)
-        else:
-            rnn = nn.LSTM(**rnn_kwargs)
-
-        return [RecurrentWrapper(rnn, returnSeq=layer._returnSeq)]
+    def forward(self, x):
+        return self.net(x)'''
 
     @staticmethod
-    def _build_pooling(layer: Pooling) -> list[nn.Module]:
+    def _gen_dataset(data: dict) -> str:
         """
-        Pooling → nn.MaxPool2d or nn.AvgPool2d.
+        Generates the get_dataloaders() function.
 
-        layer._poolSize   → kernel_size
-        layer._strides    → stride
-        layer._padding    → padding
-        layer._poolingType → MAX → nn.MaxPool2d
-                             AVERAGE → nn.AvgPool2d
+        Hardcodes the normalization stats and torchvision class so the
+        generated file needs no knowledge of your Dataset abstraction.
+        SVHN and STL10 use split= instead of train= — handled here.
         """
-        kwargs = dict(
-            kernel_size=layer._poolSize,
-            stride=layer._strides,
-            padding=layer._padding,
-        )
+        ds = data.get("dataset", {})
+        tc = data.get("trainingConfig", {})
+        builtin_type = ds.get("builtinType", "")
+        batch = tc.get("batchSize", 32)
+        val_split = tc.get("validationSplit", 0.2)
+        shuffle = tc.get("shuffle", True)
 
-        if layer._poolingType == PoolingType.AVERAGE:
-            return [nn.AvgPool2d(**kwargs)]
+        if ds.get("source") != "builtin" or not builtin_type:
+            return '''\
+def get_dataloaders():
+    raise NotImplementedError("Custom dataset loading — implement this yourself.")'''
+
+        mean, std = _NORM_STATS.get(builtin_type, ((0.5,), (0.5,)))
+        tv_class  = _TORCHVISION_CLASS.get(builtin_type, "datasets.MNIST")
+
+        # build the train= vs split= kwarg
+        if builtin_type in _SPLIT_KWARG:
+            train_kwarg = 'split="train"'
         else:
-            return [nn.MaxPool2d(**kwargs)]
+            train_kwarg = "train=True"
+
+        return f'''\
+def get_dataloaders(data_root: str = "./data"):
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean={mean}, std={std}),
+    ])
+
+    full_dataset = {tv_class}(root=data_root, {train_kwarg}, download=True, transform=transform)
+
+    val_size   = int(len(full_dataset) * {val_split})
+    train_size = len(full_dataset) - val_size
+
+    if val_size > 0:
+        train_set, val_set = random_split(full_dataset, [train_size, val_size])
+    else:
+        train_set, val_set = full_dataset, None
+
+    train_loader = DataLoader(train_set, batch_size={batch}, shuffle={shuffle}, num_workers=2, pin_memory=True)
+    val_loader   = DataLoader(val_set,   batch_size={batch}, shuffle=False,    num_workers=2, pin_memory=True) if val_set else None
+
+    return train_loader, val_loader'''
 
     @staticmethod
-    def _build_flatten(layer: Flatten) -> list[nn.Module]:
+    def _gen_training(data: dict) -> str:
         """
-        Flatten → nn.Flatten(start_dim=1).
+        Generates train_one_epoch(), evaluate(), and build_optimizer_and_loss().
 
-        start_dim=1 means we flatten everything EXCEPT the batch dimension.
-        A tensor of shape (batch, C, H, W) becomes (batch, C*H*W).
-        start_dim=0 would also flatten the batch dimension — never what you want.
+        Optimizer and loss are read from NetworkConfig. Metrics beyond accuracy
+        use sklearn so we only collect predictions when they're actually needed.
         """
-        return [nn.Flatten(start_dim=1)]
+        nc = data.get("networkConfig", {})
+        optimizer   = nc.get("optimizer", "adam")
+        loss_type   = nc.get("loss", "cross_entropy")
+        lr          = nc.get("learningRate", 0.001)
+        metrics     = nc.get("metrics", ["accuracy"])
+
+        # ── optimizer string ──────────────────────────────────────────────────
+        opt_map = {
+            "adam":    f"optim.Adam(model.parameters(), lr={lr})",
+            "sgd":     f"optim.SGD(model.parameters(), lr={lr}, momentum=0.9)",
+            "rmsprop": f"optim.RMSprop(model.parameters(), lr={lr})",
+        }
+        opt_code = opt_map.get(optimizer, opt_map["adam"])
+
+        # ── loss string ───────────────────────────────────────────────────────
+        loss_map = {
+            "cross_entropy": "nn.CrossEntropyLoss()",
+            "mse":           "nn.MSELoss()",
+            "bce":           "nn.BCEWithLogitsLoss()",
+        }
+        loss_code = loss_map.get(loss_type, "nn.CrossEntropyLoss()")
+
+        # ── metric collection inside evaluate() ───────────────────────────────
+        needs_preds = any(m in metrics for m in ["f1_score", "precision", "recall"])
+        pred_collection = ""
+        metric_lines = []
+
+        if needs_preds:
+            pred_collection = """\
+        all_preds.extend(predicted.cpu().numpy())
+        all_labels.extend(labels.cpu().numpy())"""
+
+        if "accuracy" in metrics:
+            metric_lines.append('    results["accuracy"] = 100.0 * correct / total')
+        if "f1_score" in metrics:
+            metric_lines.append('    results["f1_score"] = f1_score(all_labels, all_preds, average="macro", zero_division=0)')
+        if "precision" in metrics:
+            metric_lines.append('    results["precision"] = precision_score(all_labels, all_preds, average="macro", zero_division=0)')
+        if "recall" in metrics:
+            metric_lines.append('    results["recall"] = recall_score(all_labels, all_preds, average="macro", zero_division=0)')
+
+        metrics_block = "\n".join(metric_lines) if metric_lines else '    results["loss"] = running_loss / total'
+        preds_init    = "\n    all_preds, all_labels = [], []" if needs_preds else ""
+        preds_extend  = f"\n        {pred_collection.strip()}" if needs_preds else ""
+
+        return f'''\
+def build_optimizer_and_loss(model):
+    optimizer = {opt_code}
+    criterion = {loss_code}
+    return optimizer, criterion
+
+
+def train_one_epoch(model, loader, optimizer, criterion, device):
+    """One full pass over the training set. Returns average loss."""
+    model.train()
+    running_loss = 0.0
+
+    for inputs, labels in loader:
+        inputs, labels = inputs.to(device), labels.to(device)
+        optimizer.zero_grad()
+        outputs = model(inputs)
+        loss = criterion(outputs, labels)
+        loss.backward()
+        optimizer.step()
+        running_loss += loss.item() * inputs.size(0)
+
+    return running_loss / len(loader.dataset)
+
+
+def evaluate(model, loader, criterion, device) -> dict:
+    """Run the model in eval mode and return a dict of metrics."""
+    model.eval()
+    running_loss = 0.0
+    correct = 0
+    total = 0{preds_init}
+
+    with torch.no_grad():
+        for inputs, labels in loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            outputs  = model(inputs)
+            loss     = criterion(outputs, labels)
+            running_loss += loss.item() * inputs.size(0)
+            _, predicted = outputs.max(1)
+            total   += labels.size(0)
+            correct += predicted.eq(labels).sum().item(){preds_extend}
+
+    results = {{"loss": running_loss / total}}
+{metrics_block}
+    return results'''
 
     @staticmethod
-    def _build_activation(layer: Activation) -> list[nn.Module]:
+    def _gen_main(data: dict) -> str:
         """
-        Activation → the corresponding nn activation module.
+        Generates the if __name__ == '__main__' block.
 
-        LINEAR is a no-op — returns an empty list (no module added).
-        This is intentional: linear activation means "do nothing", so adding
-        an nn.Identity() would just waste a forward pass.
-
-        Softmax uses dim=1 — applies across the class dimension for a
-        (batch, num_classes) output tensor, which is the standard setup.
-        If you ever add sequence outputs, this dim will need revisiting.
+        Wires everything together: device detection, data loading,
+        model construction, training loop with per-epoch logging,
+        and optional early stopping if configured.
         """
-        t = layer._activationType
+        tc = data.get("trainingConfig", {})
+        epochs     = tc.get("epochs", 10)
+        early_stop = tc.get("earlyStop", False)
 
-        if t == ActivationType.RELU:
-            return [nn.ReLU()]
-        elif t == ActivationType.SIGMOID:
-            return [nn.Sigmoid()]
-        elif t == ActivationType.TANH:
-            return [nn.Tanh()]
-        elif t == ActivationType.SOFTMAX:
-            return [nn.Softmax(dim=1)]
-        elif t == ActivationType.LINEAR:
-            return []   # no-op — linear activation = identity, no module needed
-        else:
-            raise ValueError(f"Unknown activation type: {t}")
+        early_stop_block = ""
+        if early_stop:
+            early_stop_block = """\
+
+        # Early stopping — stop if val loss doesn't improve for 5 epochs
+        if val_loader and val_metrics["loss"] < best_val_loss:
+            best_val_loss = val_metrics["loss"]
+            patience_counter = 0
+            torch.save(model.state_dict(), "best_weights.pt")
+        elif val_loader:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print(f"Early stopping triggered at epoch {epoch + 1}")
+                break"""
+
+        early_stop_init = "\n    best_val_loss = float('inf')\n    patience_counter = 0\n    patience = 5" if early_stop else ""
+
+        return f'''\
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"Using device: {{device}}")
+
+    train_loader, val_loader = get_dataloaders()
+    model     = Model().to(device)
+    optimizer, criterion = build_optimizer_and_loss(model)
+{early_stop_init}
+    for epoch in range({epochs}):
+        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
+        log = f"Epoch {{epoch + 1:>3}}/{{{epochs}}}  train_loss={{train_loss:.4f}}"
+
+        if val_loader:
+            val_metrics = evaluate(model, val_loader, criterion, device)
+            metrics_str = "  ".join(f"val_{{k}}={{v:.4f}}" for k, v in val_metrics.items())
+            log += f"  {{metrics_str}}"
+{early_stop_block}
+        print(log)
+
+    torch.save(model.state_dict(), "weights.pt")
+    print("Training complete. Weights saved to weights.pt")'''
+
+    # ── layer-to-code dispatcher ──────────────────────────────────────────────
+
+    @staticmethod
+    def _layer_to_code(ldata: dict) -> str:
+        """
+        Converts a single serialized layer dict into the nn.Module
+        constructor call string that goes inside nn.Sequential.
+
+        Returns an empty string for LINEAR activation (no-op — no module needed).
+        Returns a comma-separated pair for layers that expand into two modules
+        (e.g. Conv2D + Dropout2d) — each is added as a separate Sequential entry
+        by the caller splitting on newline.
+        """
+        t = ldata["type"]
+
+        if t == "InputLayer":
+            return ""
+
+        elif t == "Flatten":
+            return "nn.Flatten(start_dim=1)"
+
+        elif t == "Dense":
+            in_f  = ldata["inputShape"][0]
+            out_f = ldata["unit"]
+            bias  = ldata["useBias"]
+            lines = [f"nn.Linear({in_f}, {out_f}, bias={bias})"]
+            if ldata.get("dropout") and ldata["dropout"] > 0:
+                lines.append(f"nn.Dropout(p={ldata['dropout']})")
+            return "\n            ".join(lines)
+
+        elif t == "Conv2D":
+            in_c = ldata["inputShape"][0]
+            lines = [
+                f"nn.Conv2d({in_c}, {ldata['filters']}, "
+                f"kernel_size={tuple(ldata['kernelSize'])}, "
+                f"stride={tuple(ldata['strides'])}, "
+                f"padding={tuple(ldata['padding'])})"
+            ]
+            if ldata.get("dropout") and ldata["dropout"] > 0 and ldata.get("dropoutStyle"):
+                if ldata["dropoutStyle"] == "spatial":
+                    lines.append(f"nn.Dropout2d(p={ldata['dropout']})")
+                else:
+                    lines.append(f"nn.Dropout(p={ldata['dropout']})")
+            return "\n            ".join(lines)
+
+        elif t == "Recurrent":
+            in_size    = ldata["inputShape"][1]   # (seq_len, features) → features
+            rnn_class  = "nn.GRU" if ldata.get("recurrentType") == "gru" else "nn.LSTM"
+            drop       = ldata["dropout"] if ldata["numLayer"] > 1 else 0.0
+            return (
+                f"RecurrentWrapper(\n"
+                f"                {rnn_class}({in_size}, {ldata['hiddenSize']}, "
+                f"num_layers={ldata['numLayer']}, batch_first=True, "
+                f"dropout={drop}, bidirectional={ldata['bidirection']}),\n"
+                f"                return_seq={ldata['returnSeq']}\n"
+                f"            )"
+            )
+
+        elif t == "Pooling":
+            pool_class = "nn.AvgPool2d" if ldata.get("poolingType") == "average" else "nn.MaxPool2d"
+            return (
+                f"{pool_class}(kernel_size={tuple(ldata['poolSize'])}, "
+                f"stride={tuple(ldata['strides'])}, padding={tuple(ldata['padding'])})"
+            )
+
+        elif t == "Activation":
+            act_map = {
+                "relu":    "nn.ReLU()",
+                "sigmoid": "nn.Sigmoid()",
+                "tanh":    "nn.Tanh()",
+                "softmax": "nn.Softmax(dim=1)",
+                "linear":  "",   # no-op
+            }
+            return act_map.get(ldata.get("activationType", ""), "")
+
+        return ""
+
+    

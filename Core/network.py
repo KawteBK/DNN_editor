@@ -1,6 +1,6 @@
-from layer import (Activation, ActivationType, Conv2D, DropoutStyle,Dense, Flatten, InputLayer, Layer,
+from .layer import (Activation, ActivationType, Conv2D, DropoutStyle,Dense, Flatten, InputLayer, Layer,
                    Pooling, PoolingType, Recurrent, RecurrentType)
-from connection import Connection
+from .connection import Connection
 from collections import deque
 class Network:
     def __init__(self, id:str):
