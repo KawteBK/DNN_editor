@@ -222,7 +222,6 @@ class Network:
  #for the deserialization of the network, we need to be able to convert it to a dictionary and back, this is for the project saving and loading, and also for the future when we want to upload networks and need to store their metadata in the project file
     @classmethod
     def fromDict(cls, data: dict) -> "Network":
-        from layer import InputLayer, Dense, Conv2D, Recurrent, Pooling, Activation, ActivationType
        
         if not data:
             return None

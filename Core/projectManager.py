@@ -1,7 +1,7 @@
 import os
 import json
 
-from project import Project
+from .project import Project
 
 
 class ProjectManager:
