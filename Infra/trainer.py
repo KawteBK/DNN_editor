@@ -202,14 +202,14 @@ class PyTorchTrainer:
         if isinstance(inputs, np.ndarray):
             tensor = torch.from_numpy(inputs).float()
             # 1D (flat vector), 2D (seq/flat), 3D (C,H,W) → add batch dim
-            if tensor.dim() in (1, 2, 3):
+            if tensor.dim() in (1, 3):
                 return tensor.unsqueeze(0)
             return tensor   # already (N, ...) — trust the caller
  
         # torch.Tensor
         if isinstance(inputs, torch.Tensor):
             tensor = inputs.float()
-            if tensor.dim() in (1, 2, 3):
+            if tensor.dim() in (1, 3):
                 return tensor.unsqueeze(0)
             return tensor
  

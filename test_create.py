@@ -79,7 +79,7 @@ net.addLayer(Dense(unit=10, useBias=True, dropout=0.0,
                    id="out", name="Output", role="output"))
 net.addLayer(Activation(ActivationType.SOFTMAX, id="softmax", name="Softmax"))
 
-# Wire layers
+# Wire layersjjk
 net.addConnect("input",  "conv1")
 net.addConnect("conv1",  "relu1")
 net.addConnect("relu1",  "pool1")
