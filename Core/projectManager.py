@@ -34,6 +34,16 @@ class ProjectManager:
             with open(logs_path, "w", encoding="utf-8") as f:
                 json.dump(logs, f, indent=2)
 
+        # now for the script.py to save the whole script to be executed without needing the editor
+        SCRIPT_FILENAME = "script.py"
+        script_path = os.path.join(project.path, SCRIPT_FILENAME)
+        with open(script_path, "w", encoding="utf-8") as f:
+            from Infra.codeGenerator import PyTorchCodeGenerator
+            code = PyTorchCodeGenerator.generate(project)
+            f.write(code)
+           
+
+
     # ── load ──────────────────────────────────────────────────────────────────
 
     @staticmethod

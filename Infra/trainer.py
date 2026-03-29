@@ -2,7 +2,7 @@ import os
 import torch
 import torch.nn as nn
 import torch.optim as optim
-
+import numpy as np
 from Core.project import Project
 from Core.networkConfig import OptimizerType, LossType, MetricType
 from .PytorchModelBuilder import PyTorchModelBuilder
@@ -111,7 +111,114 @@ class PyTorchTrainer:
 
         return project
 
-    # ── private ───────────────────────────────────────────────────────────────
+
+
+    @staticmethod
+    def predict(project: Project, inputs) -> dict:
+        """
+        Runs a forward pass on `inputs` using the trained weights saved in
+        project.weightsPath and returns a results dict:
+ 
+            {
+                "classes":       [2, 0, 7, ...],       # predicted class index per sample
+                "probabilities": [[0.01, ...], ...],   # softmax probability per class per sample
+                "confidence":    [0.93, 0.87, ...],    # max probability per sample
+            }
+ 
+        `inputs` can be any of:
+            - torch.Tensor  shape (N, *input_shape) or (*input_shape,) for a single sample
+            - np.ndarray    same shape rules — converted to float32 tensor automatically
+            - PIL.Image     single image — converted and given a batch dimension
+ 
+        Always reloads weights from disk — works correctly whether called right
+        after train() or on a project reloaded from a saved file days later.
+ 
+        NOTE: does NOT apply normalization. Pass inputs that are already
+        preprocessed the same way training data was. For built-in datasets use:
+            PyTorchDatasets._get_builtin_transforms(project.dataset._builtinType)
+ 
+        Raises ValueError if no weights file exists (project not yet trained).
+        Raises ValueError if the project has no network.
+        Raises TypeError  if inputs is an unsupported type.
+        """
+        if project.network is None:
+            raise ValueError("Project has no network — cannot run inference.")
+ 
+        weights_path = project.weightsPath or os.path.join(project.path, Project.WEIGHTS_FILENAME)
+        if not os.path.isfile(weights_path):
+            raise ValueError(
+                f"No weights file found at '{weights_path}'.\n"
+                "Train the project first, or check that weightsPath is set correctly."
+            )
+ 
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+ 
+        # ── build model and load saved weights ────────────────────────────────
+        model = PyTorchModelBuilder.build(project.network)
+        state = torch.load(weights_path, map_location=device, weights_only=True)
+        model.load_state_dict(state)
+        model.to(device)
+        model.eval()
+ 
+        # ── normalise inputs to a float32 tensor with a batch dimension ───────
+        tensor = PyTorchTrainer._to_tensor(inputs)
+        tensor = tensor.to(device)
+ 
+        # ── forward pass ──────────────────────────────────────────────────────
+        with torch.no_grad():
+            logits = model(tensor)               # (N, num_classes)
+            probs  = torch.softmax(logits, dim=1) # (N, num_classes)
+            conf, classes = probs.max(dim=1)      # both (N,)
+ 
+        return {
+            "classes":       classes.cpu().tolist(),
+            "probabilities": probs.cpu().tolist(),
+            "confidence":    conf.cpu().tolist(),
+        }
+ 
+    # ── private stuff ───────────────────────────────────────────────────────────────
+ 
+    @staticmethod
+    def _to_tensor(inputs) -> torch.Tensor:
+        """
+        Converts whatever the user passes into a float32 tensor shaped (N, *).
+ 
+        Handles:
+          - torch.Tensor : used as-is; unsqueezed to add batch dim if 1D/2D/3D
+          - np.ndarray   : converted to float32 tensor; same unsqueeze logic
+          - PIL.Image    : converted via ToTensor() and unsqueezed to (1, C, H, W)
+        """
+        # PIL Image
+        try:
+            from PIL import Image as PILImage
+            if isinstance(inputs, PILImage.Image):
+                from torchvision import transforms
+                tensor = transforms.ToTensor()(inputs)   # (C, H, W)
+                return tensor.unsqueeze(0).float()       # (1, C, H, W)
+        except ImportError:
+            pass
+ 
+        # numpy array
+        if isinstance(inputs, np.ndarray):
+            tensor = torch.from_numpy(inputs).float()
+            # 1D (flat vector), 2D (seq/flat), 3D (C,H,W) → add batch dim
+            if tensor.dim() in (1, 2, 3):
+                return tensor.unsqueeze(0)
+            return tensor   # already (N, ...) — trust the caller
+ 
+        # torch.Tensor
+        if isinstance(inputs, torch.Tensor):
+            tensor = inputs.float()
+            if tensor.dim() in (1, 2, 3):
+                return tensor.unsqueeze(0)
+            return tensor
+ 
+        raise TypeError(
+            f"Unsupported input type: {type(inputs).__name__}. "
+            "Pass a torch.Tensor, np.ndarray, or PIL.Image."
+        )
+      
+
 
     @staticmethod
     def _train_one_epoch(model, loader, optimizer, criterion, device) -> float:
