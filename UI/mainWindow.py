@@ -1,5 +1,10 @@
 import sys
 import os
+
+#this to fix all the bullshit about module notfound when importing from another folder that  is not on the same level as the file that imports it
+sys.path.insert(0, os.path.dirname(__file__))                      # -> UI/
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))     # -> ai_editor/
+
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QPushButton,
     QTabWidget, QLabel, QFileDialog, QMessageBox, QInputDialog

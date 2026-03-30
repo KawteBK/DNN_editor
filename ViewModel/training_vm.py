@@ -2,7 +2,7 @@ import time
 from PyQt6.QtCore import QObject, QThread, pyqtSignal
 
 from Core.project import Project
-from PyTorch.trainer import PyTorchTrainer
+from Infra.trainer import PyTorchTrainer
 
 
 class _TrainingWorker(QObject):
