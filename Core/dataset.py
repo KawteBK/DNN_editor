@@ -1,9 +1,9 @@
 from enum import Enum
 
 
-class DatasetSource(Enum):
+class DatasetSource(Enum): #shiiit, i don't think i will be able to add thsi feature before mai fuck this
     BUILTIN = "builtin"
-    CUSTOM = "custom"    #eeeh, for the future, when the user will be able to upload his owna datasets, for now we will only have builtin datasets
+    CUSTOM = "custom"    #yeeeh, for the future, when the user will be able to upload his owna datasets, for now we will only have builtin datasets
 class BuiltinDataset(Enum):
     MNIST          = "mnist"
     FASHION_MNIST  = "fashion_mnist"

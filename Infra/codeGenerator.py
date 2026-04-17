@@ -1,4 +1,5 @@
 from Core.project import Project
+import project
 
 
 # Canonical normalization stats — mirrored from pytorch_datasets.py
@@ -43,17 +44,36 @@ class PyTorchCodeGenerator:
         The output file has zero dependencies on the codebase  it only
         needs torch and torchvision installed.
         """
-        project.network.propagate_shapes()
+       # Handle missing configs
+        
+    
+       
 
-    # grab order from live object before serializing
-        ordered_ids = [layer._id for layer in project.network.topological_sort()]
+        if project.network is None or not project.network.layers:
+            return '''# No network defined yet.
+            # Add layers from the Layer Palette to build your network.'''
+        # Handle missing dataset
+        if project.dataset is None:
+                return '''# No dataset selected.
+                # Go to the Dataset dock and choose a dataset.'''
+        
 
-        data = project.toDict()
-        data["network"] = project.network.toDict()
-        data["_ordered_ids"] = ordered_ids   # _gen_model reads this
+        if project.networkConfig is None or project.trainingConfig is None:
+         return '''# Training configuration incomplete.
+                # Fill in the Training Config dock with hyperparameters.'''
+        
+        try:
+           project.network.propagate_shapes()
+
+           # grab order from live object before serializing
+           ordered_ids = [layer._id for layer in project.network.topological_sort()]
+
+           data = project.toDict()
+           data["network"] = project.network.toDict()
+           data["_ordered_ids"] = ordered_ids   # _gen_model reads this
       
 
-        sections = [
+           sections = [
             PyTorchCodeGenerator._gen_header(data),
             PyTorchCodeGenerator._gen_imports(data),
             PyTorchCodeGenerator._gen_recurrent_wrapper(data),
@@ -61,10 +81,17 @@ class PyTorchCodeGenerator:
             PyTorchCodeGenerator._gen_dataset(data),
             PyTorchCodeGenerator._gen_training(data),
             PyTorchCodeGenerator._gen_main(data),
-        ]
+            ]
 
-        # Filter empty sections (e.g. no recurrent layers → no wrapper class)
-        return "\n\n\n".join(s for s in sections if s.strip()) # strip removes whitespaces and empty stuff from a string, if after removing those nothing remains, empty shit baby, move on
+            # Filter empty sections (e.g. no recurrent layers → no wrapper class)
+            
+
+           return "\n\n\n".join(s for s in sections if s.strip()) # strip removes whitespaces and empty stuff from a string, if after removing those nothing remains, empty shit baby, move on
+        
+        except Exception as e:
+              return f'''# Cannot generate complete code: {e}
+              #Check that your network has an input layer and all connections are valid.'''
+
 
     # ── file-level sections ───
 

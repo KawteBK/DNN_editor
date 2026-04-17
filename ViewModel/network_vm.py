@@ -66,6 +66,12 @@ class NetworkVM(QObject):
         # Emit for every existing layer and connection so the canvas
         # can rebuild itself after a load
         if network is not None:
+
+            # Ensure shapes are propagated before visual nodes are created
+            try:
+               network.propagate_shapes()
+            except Exception:
+               pass  # Silent fail — shapes will propagate when network is complete
             for layer in network.topological_sort():
                 self.layer_added.emit(
                     layer._id,

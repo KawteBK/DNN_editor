@@ -40,7 +40,7 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         file_menu = menubar.addMenu("File")
-        file_menu.addAction("New",  self._on_new)
+        file_menu.addAction("New project",  self._on_new)
         file_menu.addAction("Open", self._on_open)
         file_menu.addAction("Save", self._on_save)
 
@@ -220,7 +220,7 @@ class MainWindow(QMainWindow):
         if not project.network.validate():
             return   # don't generate code for an incomplete network
         try:
-            from PyTorch.codeGenerator import PyTorchCodeGenerator
+            from Infra.codeGenerator import PyTorchCodeGenerator
             # Code generator needs dataset + configs — skip if not set yet
             if project.dataset is None or project.networkConfig is None:
                 return

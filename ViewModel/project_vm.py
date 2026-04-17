@@ -7,6 +7,7 @@ from Core.network import Network
 from Core.dataset import Dataset, BuiltinDataset
 from Core.trainingConfig import TrainingConfig
 from Core.networkConfig import NetworkConfig, OptimizerType, LossType, MetricType
+from Core.layer import InputLayer
 
 
 class ProjectVM(QObject):
@@ -43,7 +44,15 @@ class ProjectVM(QObject):
         project = Project(name=name, path=path)
         project.network = Network(id=name)
 
-        # Sensible defaults so the config docks have something to show
+
+        # Create default InputLayer with placeholder shape
+        # Shape (1, 28, 28) works for MNIST/Fashion-MNIST/KMNIST
+        # Will be updated when user selects a different dataset
+        default_shape = (1, 28, 28)
+        input_layer = InputLayer(inputShape=default_shape)
+        project.network.addLayer(input_layer)
+
+        # Sensible defaults so the config docks have something to show bilama
         project.trainingConfig = TrainingConfig(
             batchSize=32,
             epochs=10,
@@ -58,6 +67,14 @@ class ProjectVM(QObject):
             learningRate=0.001,
         )
         # Dataset left as None — user picks it in the dataset dock
+
+        # SAVE IMMEDIATELY to disk
+        try:
+            os.makedirs(path, exist_ok=True)
+            ProjectManager.save(project)  #to actuelly write on the disk
+        except Exception as e:
+            self.error_occurred.emit(f"Failed to create project: {e}")
+            return
 
         self._project = project
         self.project_changed.emit(self._project)
@@ -92,7 +109,21 @@ class ProjectVM(QObject):
         """Called by DatasetDock when the user picks a dataset."""
         if self._project is None:
             return
-        self._project.dataset = Dataset.fromBuiltin(builtin_type)
+        dataset = Dataset.fromBuiltin(builtin_type)
+        self._project.dataset = dataset
+
+           # Update InputLayer shape to match the selected dataset
+        input_layer = self._project.network.layers.get("input")
+        if input_layer and isinstance(input_layer, InputLayer):
+            new_shape = dataset._inputShape
+            input_layer._outputShape = new_shape
+            input_layer._inputShape = new_shape
+            
+            # Re-propagate shapes through the entire network
+            try:
+                self._project.network.propagate_shapes()
+            except Exception as e:
+                self.error_occurred.emit(f"Shape propagation error: {e}")
 
     def set_training_config(self, batch_size: int, epochs: int,
                              val_split: float, shuffle: bool,
