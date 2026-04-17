@@ -77,12 +77,16 @@ class Project:
 
     def isReadyToTrain(self) -> bool:
         if self.network is None or not self.network.validate():
+            print("Project not ready to train: network is invalid")
             return False
         if self.dataset is None:
+            print("Project not ready to train: dataset is not set")
             return False
         if self.trainingConfig is None:
+            print("Project not ready to train: training config is not set")
             return False
         if self.networkConfig is None:
+            print("Project not ready to train: network config is not set")
             return False
         return True
 

@@ -12,7 +12,7 @@ class CodeTab(QWidget):
             "background-color: #1e1e1e; color: #d4d4d4;"
             "font-family: 'Courier New', monospace; font-size: 13px;"
         )
-        # CHANGED: placeholder message in English to match the rest of the UI
+        # CHANGED: placeholder message in English to match the rest of the UI, sorry rania
         self.code_editor.setPlaceholderText(
             "# Generated PyTorch script will appear here.\n"
             "# Build a valid network and select a dataset to generate code."
@@ -29,6 +29,7 @@ class CodeTab(QWidget):
     # Pushes the generated script string into the editor.
     def set_code(self, code: str) -> None:
         self.code_editor.setPlainText(code)
+
 
     def _copy_code(self) -> None:
         clipboard = QApplication.clipboard()

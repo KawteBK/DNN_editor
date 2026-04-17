@@ -36,31 +36,32 @@ class ProjectVM(QObject):
     def project(self) -> Project | None:
         return self._project
 
-    def new_project(self, name: str, path: str) -> None:
+    def new_project(self, name: str, path: str) -> bool:
         """
         Creates a blank project with an empty network.
         The network has no layers yet — the user builds it on the canvas.
         """
-        project = Project(name=name, path=path)
-        project.network = Network(id=name)
 
+        try:
+            project = Project(name=name, path=path)
+            project.network = Network(id=name)
 
-        # Create default InputLayer with placeholder shape
-        # Shape (1, 28, 28) works for MNIST/Fashion-MNIST/KMNIST
-        # Will be updated when user selects a different dataset
-        default_shape = (1, 28, 28)
-        input_layer = InputLayer(inputShape=default_shape)
-        project.network.addLayer(input_layer)
+            # Create default InputLayer with placeholder shape
+            # Shape (1, 28, 28) works for MNIST/Fashion-MNIST/KMNIST
+            # Will be updated when user selects a different dataset
+            default_shape = (1, 28, 28)
+            input_layer = InputLayer(inputShape=default_shape)
+            project.network.addLayer(input_layer)
 
         # Sensible defaults so the config docks have something to show bilama
-        project.trainingConfig = TrainingConfig(
+            project.trainingConfig = TrainingConfig(
             batchSize=32,
             epochs=10,
             validationSplit=0.2,
             shuffle=True,
             earlyStop=True,
         )
-        project.networkConfig = NetworkConfig(
+            project.networkConfig = NetworkConfig(
             optimizer=OptimizerType.ADAM,
             loss=LossType.CROSS_ENTROPY,
             metric=[MetricType.ACCURACY],
@@ -69,15 +70,19 @@ class ProjectVM(QObject):
         # Dataset left as None — user picks it in the dataset dock
 
         # SAVE IMMEDIATELY to disk
-        try:
-            os.makedirs(path, exist_ok=True)
+           
+            os.makedirs(path, exist_ok=True) 
             ProjectManager.save(project)  #to actuelly write on the disk
-        except Exception as e:
-            self.error_occurred.emit(f"Failed to create project: {e}")
-            return
+            self._project = project
+            self.project_changed.emit(self._project)
+            return True
 
-        self._project = project
-        self.project_changed.emit(self._project)
+
+        except Exception as e:
+               self.error_occurred.emit(f"Failed to create project: {e}")
+               return False
+
+        
 
     def save(self) -> None:
         """Saves the current project to its path. Emits error_occurred on failure."""

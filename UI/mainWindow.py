@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import (
     QTabWidget, QLabel, QFileDialog, QMessageBox, QInputDialog
 )
 from PyQt6.QtCore import Qt, QTimer
-
 from tabs.network_tab import NetworkTab
 from tabs.code_tab import CodeTab
 from docks.layer_palette_dock import LayerPaletteDock
@@ -139,6 +138,9 @@ class MainWindow(QMainWindow):
         # ── start with a empty project ────────────────────────────────────────
         self.project_vm._project = None 
         self._update_ui_for_no_project() 
+#cuz 
+        self.statusBar().showMessage("Ready. Use File → New Project to get started.", 5000)
+
     # ── menu / toolbar handlers ───────────────────────────────────────────────
 
     def _on_new(self):
@@ -177,7 +179,11 @@ class MainWindow(QMainWindow):
         Hands the new network to NetworkVM, which then emits
         layer_added / connection_added so the canvas rebuilds itself.
         """
+        if project is None:
+         self._update_ui_for_no_project()
+         return
 
+        self._update_ui_for_project(project) #updating the canvas with the new no canva ui
 
         self.setWindowTitle(f"DNN Editor — {project.name}")
         self.canvas.clear_canvas()
@@ -185,6 +191,10 @@ class MainWindow(QMainWindow):
         self.dataset_dock.load_from_project(project)
         self.network_config_dock.load_from_project(project)
         self.results_dock.clear()
+        if project.dataset and project.networkConfig:
+          self._refresh_code_tab()
+        self._update_train_button_state()
+
 
     # ── training lifecycle ────────────────────────────────────────────────────
 
@@ -236,6 +246,102 @@ class MainWindow(QMainWindow):
 
     def _show_error(self, message: str):
         QMessageBox.critical(self, "Error", message)
+
+
+    def _update_ui_for_no_project(self):
+     """Disables all UI elements that depend on having an active project."""
+     # Disable toolbar buttons
+     self.btn_train.setEnabled(False)
+     self.btn_stop.setEnabled(False)  # already disabled by default
+    
+     # Disable menu actions
+     for menu_name in ["File", "Edit", "Train"]:
+        menu = self.menuBar().findChild(type("QMenu"), menu_name)
+        if menu:
+            for action in menu.actions():
+                if action.text() not in ["New project", "Open", "Quit", "Exit"]:
+                    action.setEnabled(False)
+    
+      # Disable save action specifically
+     file_menu = self.menuBar().findChild(type("QMenu"), "File")
+     if file_menu:
+        for action in file_menu.actions():
+            if action.text() == "Save":
+                action.setEnabled(False)
+    
+     # Clear the canvas
+     self.canvas.clear_canvas()
+    
+     # Reset the code tab
+     self.code_tab.set_code("")
+     self.code_tab.code_editor.setPlaceholderText(
+        "# No project loaded.\n"
+        "# Use File → New Project or File → Open to get started."
+        )
+    
+     # Clear results dock
+     self.results_dock.clear()
+    
+     # Update status bar
+     self.statusBar().showMessage("No project loaded. Create or open a project to begin.")
+    
+     # Update window title
+     self.setWindowTitle("DNN Editor")
+
+
+
+    def _update_ui_for_project(self, project):
+       """Enables all UI elements when a project is loaded/created."""
+       # Enable toolbar buttons (Train only if ready, Stop stays disabled until training starts)
+       self._update_train_button_state()
+    
+      # Enable menu actions
+       for menu_name in ["File", "Edit", "Train"]:
+         menu = self.menuBar().findChild(type("QMenu"), menu_name)
+         if menu:
+            for action in menu.actions():
+                # Skip File actions that should stay enabled even without project
+                if action.text() not in ["New project", "Open", "Save", "Quit"]:
+                    action.setEnabled(True)
+    
+       # Enable save action
+       file_menu = self.menuBar().findChild(type("QMenu"), "File")
+       if file_menu:
+         for action in file_menu.actions():
+            if action.text() == "Save":
+                action.setEnabled(True)
+    
+       # Update window title
+       self.setWindowTitle(f"DNN Editor — {project.name}")
+    
+         # Update status bar
+       self.statusBar().showMessage(f"Loaded project: {project.name}", 3000)
+
+
+    def _update_train_button_state(self): 
+       """Enable/disable Train button based on project readiness."""
+       if self.project_vm.project and self.project_vm.project.isReadyToTrain():
+          self.btn_train.setEnabled(True)
+       else:
+        self.btn_train.setEnabled(False)
+        # Optionally show tooltip explaining why
+        if self.project_vm.project:
+            missing = []
+            if self.project_vm.project.network is None or not self.project_vm.project.network.validate():
+                missing.append("valid network")
+            if self.project_vm.project.dataset is None:
+                missing.append("dataset selected")
+            if self.project_vm.project.trainingConfig is None:
+                missing.append("training config")
+            if self.project_vm.project.networkConfig is None:
+                missing.append("network config")
+            if missing:
+                self.btn_train.setToolTip(f"Cannot train: missing {', '.join(missing)}")
+            else:
+                self.btn_train.setToolTip("")
+        else:
+            self.btn_train.setToolTip("No project loaded")
+
 
 
 if __name__ == "__main__":
