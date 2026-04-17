@@ -9,7 +9,7 @@ LAYER_COLORS = {
     "Conv2D":      ("#7F77DD", "#4A4490"),   # purple
     "Pooling":     ("#E67E22", "#9A5515"),   # amber
     "Recurrent":   ("#D85A30", "#8C3515"),   # coral
-    "Flatten":     ("#888780", "#4A4845"),   # gray
+    "Flatten":     ("#FFF183", "#D88E1F"),   # yellowish
     "Activation":  ("#D4537E", "#8C2E4F"),   # pink
 }
 DEFAULT_COLOR = ("#1592A2", "#105860")

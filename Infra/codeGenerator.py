@@ -1,5 +1,5 @@
 from Core.project import Project
-import project
+
 
 
 # Canonical normalization stats — mirrored from pytorch_datasets.py

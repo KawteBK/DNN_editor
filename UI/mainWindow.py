@@ -177,11 +177,14 @@ class MainWindow(QMainWindow):
         Hands the new network to NetworkVM, which then emits
         layer_added / connection_added so the canvas rebuilds itself.
         """
+
+
         self.setWindowTitle(f"DNN Editor — {project.name}")
+        self.results_dock.clear()
         self.network_vm.set_network(project.network)
         self.dataset_dock.load_from_project(project)
         self.network_config_dock.load_from_project(project)
-        self.results_dock.clear()
+        #self.results_dock.clear()
 
     # ── training lifecycle ────────────────────────────────────────────────────
 

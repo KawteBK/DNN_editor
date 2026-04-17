@@ -67,11 +67,14 @@ class LayerConfigDock(QDockWidget):
 
     def _build_input_form(self, layer) -> None:
         # InputLayer is locked — show info only, no editable fields
+        self._suppress_signals=True
         self._layout.addRow(QLabel("Type:"), QLabel("Input Layer"))
         self._layout.addRow(QLabel("Shape:"), QLabel(str(layer._outputShape)))
         self._layout.addRow(QLabel(""), QLabel("(locked — set by dataset)"))
+        self._suppress_signals=False
 
     def _build_dense_form(self, layer: Dense) -> None:
+        self._suppress_signals=True
         self._add_name_row(layer)
 
         units = self._make_int_field(layer._unit)
@@ -94,8 +97,10 @@ class LayerConfigDock(QDockWidget):
         self._layout.addRow(QLabel("Dropout:"), dropout)
 
         self._add_shape_row(layer)
+        self._suppress_signals=False
 
     def _build_conv2d_form(self, layer: Conv2D) -> None:
+        self._suppress_signals=True
         self._add_name_row(layer)
 
         filters = self._make_int_field(layer._filters)
@@ -139,8 +144,10 @@ class LayerConfigDock(QDockWidget):
         self._layout.addRow(QLabel("Dropout style:"), ds_combo)
 
         self._add_shape_row(layer)
+        self._suppress_signals=False
 
     def _build_pooling_form(self, layer: Pooling) -> None:
+        self._suppress_signals=True
         self._add_name_row(layer)
 
         pool_size = self._make_tuple_field(layer._poolSize)
@@ -170,8 +177,10 @@ class LayerConfigDock(QDockWidget):
         self._layout.addRow(QLabel("Pool type:"), pt_combo)
 
         self._add_shape_row(layer)
+        self._suppress_signals=False
 
     def _build_recurrent_form(self, layer: Recurrent) -> None:
+        self._suppress_signals=True
         self._add_name_row(layer)
 
         hidden = self._make_int_field(layer._hiddenSize)
@@ -215,13 +224,18 @@ class LayerConfigDock(QDockWidget):
         self._layout.addRow(QLabel("Return sequence:"), ret_seq)
 
         self._add_shape_row(layer)
+        self._suppress_signals=False
 
     def _build_flatten_form(self, layer: Flatten) -> None:
+        self._suppress_signals=True
+
         self._add_name_row(layer)
         self._layout.addRow(QLabel(""), QLabel("No parameters — flattens input"))
         self._add_shape_row(layer)
+        self._suppress_signals=False
 
     def _build_activation_form(self, layer: Activation) -> None:
+        self._suppress_signals=True
         self._add_name_row(layer)
 
         at_combo = QComboBox()
@@ -235,6 +249,7 @@ class LayerConfigDock(QDockWidget):
         self._layout.addRow(QLabel("Activation:"), at_combo)
 
         self._add_shape_row(layer)
+        self._suppress_signals=False
 
     # ── shared row helpers ────────────────────────────────────────────────────
 

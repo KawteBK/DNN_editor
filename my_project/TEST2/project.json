@@ -1,0 +1,39 @@
+{
+  "name": "TEST2",
+  "path": "/Users/kawterbekka/Desktop/ai_editor/my_project/TEST2",
+  "network": {
+    "id": "TEST2",
+    "layers": {
+      "input": {
+        "id": "input",
+        "name": "Input",
+        "role": "input",
+        "type": "InputLayer",
+        "inputShape": null,
+        "outputShape": [
+          1,
+          28,
+          28
+        ]
+      }
+    },
+    "connections": []
+  },
+  "dataset": {},
+  "trainingConfig": {
+    "batchSize": 32,
+    "epochs": 10,
+    "validationSplit": 0.2,
+    "shuffle": true,
+    "earlyStop": true
+  },
+  "networkConfig": {
+    "optimizer": "adam",
+    "loss": "cross_entropy",
+    "metrics": [
+      "accuracy"
+    ],
+    "learningRate": 0.001
+  },
+  "trainingLogs": {}
+}
