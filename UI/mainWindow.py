@@ -136,9 +136,9 @@ class MainWindow(QMainWindow):
         # Network changes → regenerate code tab
         self.network_vm.network_changed.connect(self._refresh_code_tab)
 
-        # ── start with a blank project ────────────────────────────────────────
-        self.project_vm.new_project(name="untitled", path=os.path.expanduser("~/untitled_dnn"))
-
+        # ── start with a empty project ────────────────────────────────────────
+        self.project_vm._project = None 
+        self._update_ui_for_no_project() 
     # ── menu / toolbar handlers ───────────────────────────────────────────────
 
     def _on_new(self):
@@ -180,11 +180,11 @@ class MainWindow(QMainWindow):
 
 
         self.setWindowTitle(f"DNN Editor — {project.name}")
-        self.results_dock.clear()
+        self.canvas.clear_canvas()
         self.network_vm.set_network(project.network)
         self.dataset_dock.load_from_project(project)
         self.network_config_dock.load_from_project(project)
-        #self.results_dock.clear()
+        self.results_dock.clear()
 
     # ── training lifecycle ────────────────────────────────────────────────────
 
