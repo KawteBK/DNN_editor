@@ -52,7 +52,8 @@ class MainWindow(QMainWindow):
         edit_menu.addAction("Undo")   # stubs — wired later
         edit_menu.addAction("Redo")
 
-        menubar.addMenu("Window")
+        window_menu=menubar.addMenu("Window")
+        
 
         train_menu = menubar.addMenu("Train")
         train_menu.addAction("Start Training", self._on_train)
@@ -60,6 +61,8 @@ class MainWindow(QMainWindow):
         menubar.addMenu("About")
         menubar.addMenu("Settings")
 
+
+        
         # ── toolbar ───────────────────────────────────────────────────────────
         toolbar = QToolBar()
         self.addToolBar(toolbar)
@@ -124,6 +127,16 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,  self.dataset_dock)
         self.addDockWidget(Qt.DockWidgetArea.RightDockWidgetArea,  self.network_config_dock)
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.results_dock)
+
+
+#the palete dok hide and unhide
+        for dock in [self.palette_dock, self.config_dock, self.dataset_dock, 
+                self.network_config_dock, self.results_dock]:
+            action = window_menu.addAction(dock.windowTitle())
+            action.setCheckable(True)
+            action.setChecked(True)
+            action.triggered.connect(lambda checked, d=dock: d.setVisible(checked))
+            dock.visibilityChanged.connect(lambda visible, a=action: a.setChecked(visible))
 
         # ── cross-VM wiring ───────────────────────────────────────────────────
 
