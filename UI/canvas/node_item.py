@@ -1,6 +1,8 @@
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 from PyQt6.QtGui import QBrush, QPen, QColor
 from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QRectF
+
 
 # Color per layer type — makes different layers visually distinct on the canvas
 LAYER_COLORS = {
@@ -9,7 +11,7 @@ LAYER_COLORS = {
     "Conv2D":      ("#7F77DD", "#4A4490"),   # purple
     "Pooling":     ("#E67E22", "#9A5515"),   # amber
     "Recurrent":   ("#D85A30", "#8C3515"),   # coral
-    "Flatten":     ("#FFF183", "#D88E1F"),   # yellowish
+    "Flatten":     ("#B29928", "#906E00"),   # yellowish
     "Activation":  ("#D4537E", "#8C2E4F"),   # pink
 }
 DEFAULT_COLOR = ("#1592A2", "#105860")
@@ -68,3 +70,22 @@ class NodeItem(QGraphicsRectItem):
         if self.layer_type == "Activation":
             self._activation_type = act_type
             self.label.setPlainText(f"{self.layer_type}\n({act_type})")
+
+
+   # Override paint method in NodeItem for rounded corners
+
+    def paint(self, painter, option, widget=None):
+        """Override to draw rounded rectangle."""
+        painter.setBrush(self.brush())
+        painter.setPen(self.pen())
+    
+        # Draw rounded rectangle
+        rect = QRectF(0, 0, self.rect().width(), self.rect().height())
+        painter.drawRoundedRect(rect, 10, 10)  # 10px radius
+    
+        # Draw children (labels, etc.)
+        for child in self.childItems():
+            painter.save()
+            painter.translate(child.pos())
+            child.paint(painter, option, widget)
+            painter.restore()
