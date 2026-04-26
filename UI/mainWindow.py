@@ -65,6 +65,9 @@ class MainWindow(QMainWindow):
         btn_delete     = QPushButton("Delete")
         btn_add        = QPushButton("Add")
 
+        btn_add.clicked.connect(self._on_add_layer)
+
+
         self.btn_train.setStyleSheet(
             "background-color: #28a745; color: white; padding: 5px 15px;"
         )
@@ -170,6 +173,18 @@ class MainWindow(QMainWindow):
 
     def _on_stop(self):
         self.training_vm.stop()
+
+
+    def _on_add_layer(self):
+        """Opens a dialog to choose layer type and adds it to canvas."""
+        from PyQt6.QtWidgets import QInputDialog
+    
+        layer_types = ["Dense", "Conv2D", "Pooling", "Recurrent", "Flatten", "Activation"]
+        layer_type, ok = QInputDialog.getItem(
+            self, "Add Layer", "Select layer type:", layer_types, 0, False
+        )
+        if ok and layer_type:
+            self.network_vm.add_layer(layer_type)
 
     # ── project change ────────────────────────────────────────────────────────
 
