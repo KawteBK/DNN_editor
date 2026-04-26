@@ -4,6 +4,7 @@ from PyQt6.QtCore import Qt, QPointF
 
 from canvas.node_item import NodeItem
 from canvas.connection_item import ConnectionItem
+from Core.layer import Activation
 
 
 class CanvasView(QGraphicsView):
@@ -75,9 +76,14 @@ class CanvasView(QGraphicsView):
             return
         for layer_id, node in self._nodes.items():
             layer = self.network_vm.get_layer(layer_id)
-            if layer and layer._outputShape:
-                node.update_shape_label(str(layer._outputShape))
+            if layer:
+                if layer._outputShape:
+                    node.update_shape_label(str(layer._outputShape))
+                    # Update activation type if applicable
+                if isinstance(layer, Activation) and hasattr(node, 'update_activation_type'):
+                    node.update_activation_type(layer._activationType.value)
 
+            
     # ── canvas reset (called when a project is loaded) ────────────────────────
 
     def clear_canvas(self) -> None:

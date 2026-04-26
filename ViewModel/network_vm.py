@@ -223,6 +223,11 @@ class NetworkVM(QObject):
         layer = self._network.layers.get(layer_id)
         if layer is None:
             return
+       # if it's an activation layer, notify canvas
+        if layer and isinstance(layer, Activation):
+            if "activationType" in params:
+                # Emit to canvas to update label
+                 self.network_changed.emit()  # Will trigger refresh
 
         for key, value in params.items():
             attr = f"_{key}"

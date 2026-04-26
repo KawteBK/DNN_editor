@@ -24,6 +24,8 @@ class NodeItem(QGraphicsRectItem):
         super().__init__(0, 0, width, height)
         self.layer_id = layer_id       # ADDED: used by canvas to call network_vm methods
         self.layer_type = layer_type   # ADDED: used for color lookup
+        self._activation_type = None  # Store activation type
+
         self.connections = []
         self.setPos(x, y)
 
@@ -60,3 +62,9 @@ class NodeItem(QGraphicsRectItem):
             for conn in self.connections:
                 conn.update_position()
         return super().itemChange(change, value)
+    
+    def update_activation_type(self, act_type: str):
+        """Update the label for activation layers."""
+        if self.layer_type == "Activation":
+            self._activation_type = act_type
+            self.label.setPlainText(f"{self.layer_type}\n({act_type})")
