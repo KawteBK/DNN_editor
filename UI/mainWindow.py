@@ -1,5 +1,9 @@
 import sys
 import os
+try:
+    import winsound  # Windows only
+except:
+    pass
 
 #this to fix all the bullshit about module notfound when importing from another folder that  is not on the same level as the file that imports it
 sys.path.insert(0, os.path.dirname(__file__))                      # -> UI/
@@ -286,6 +290,44 @@ class MainWindow(QMainWindow):
         elapsed = self.training_vm.elapsed_seconds()
         mins, secs = divmod(int(elapsed), 60)
         self.training_time_label.setText(f"Training Time: {mins:02d}:{secs:02d}")
+
+
+    def _on_training_finished(self, project):
+        #import winsound  # Windows
+        # OR for cross-platform:
+        # from PyQt6.QtMultimedia import QSound
+    
+        # Write the updated project back and save
+        self.project_vm._project = project
+        self.project_vm.save()
+        elapsed = self.training_vm.elapsed_seconds()
+    
+        # Play sound
+        try:
+            # Windows
+            winsound.MessageBeep(winsound.MB_ICONINFORMATION)
+            # OR winsound.Beep(1000, 500)  # frequency, duration
+        except:
+            try:
+                # Linux/Mac - simple console beep
+                print('\a')
+            except:
+                pass
+    
+        # Show notification
+        from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
+    
+        if QSystemTrayIcon.isSystemTrayAvailable():
+            tray_icon = QSystemTrayIcon(self)
+            tray_icon.show()
+            tray_icon.showMessage(
+                "Training Complete", 
+                f"Finished in {elapsed:.0f} seconds!",
+                QSystemTrayIcon.MessageIcon.Information,
+                3000
+            )
+    
+        self.statusBar().showMessage(f"Training complete — {elapsed:.0f}s", 5000)
 
     # ── code tab ─────────────────────────────────────────────────────────────
 

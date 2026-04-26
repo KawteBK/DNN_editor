@@ -20,7 +20,7 @@ class Model(nn.Module):
         super().__init__()
         self.net = nn.Sequential(
             nn.Flatten(start_dim=1),  # Flatten 1
-            nn.Linear(784, 128, bias=True),  # Dense 1
+            nn.Linear(784, 128, bias=True),  # Densekkk
         )
 
     def forward(self, x):
