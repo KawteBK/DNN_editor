@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from tabs.network_tab import NetworkTab
 from tabs.code_tab import CodeTab
+from tabs.inference_tab import OngletInference
 from docks.layer_palette_dock import LayerPaletteDock
 from docks.layer_config_dock import LayerConfigDock
 from docks.network_config_dock import NetworkConfigDock
@@ -66,7 +67,7 @@ class MainWindow(QMainWindow):
         btn_add        = QPushButton("Add")
 
         btn_add.clicked.connect(self._on_add_layer)
-
+        btn_delete.clicked.connect(self._on_delete_selected)
 
         self.btn_train.setStyleSheet(
             "background-color: #28a745; color: white; padding: 5px 15px;"
@@ -101,8 +102,10 @@ class MainWindow(QMainWindow):
         tabs = QTabWidget()
         self.canvas   = NetworkTab(self.network_vm)
         self.code_tab = CodeTab()
+        self.inference_tab = OngletInference()
         tabs.addTab(self.canvas, "Network")
         tabs.addTab(self.code_tab, "Code")
+        tabs.addTab(self.inference_tab, "Inference")
         self.setCentralWidget(tabs)
 
         # ── docks ─────────────────────────────────────────────────────────────
@@ -185,6 +188,47 @@ class MainWindow(QMainWindow):
         )
         if ok and layer_type:
             self.network_vm.add_layer(layer_type)
+
+
+    def _on_delete_selected(self):
+        """Deletes selected layer or connection with confirmation."""
+        from PyQt6.QtWidgets import QMessageBox
+    
+        # Get selected items from canvas
+        selected_items = self.canvas.scene.selectedItems()
+    
+        if not selected_items:
+            self.statusBar().showMessage("Nothing selected. Click a layer or connection first.", 3000)
+            return
+    
+        # Check if it's a node (layer) or connection
+        from canvas.node_item import NodeItem
+        from canvas.connection_item import ConnectionItem
+    
+        for item in selected_items:
+            if isinstance(item, NodeItem):
+                reply = QMessageBox.question(
+                    self, "Delete Layer",
+                    f"Delete layer '{item.layer_id}'?\nThis will also remove all its connections.",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    self.network_vm.remove_layer(item.layer_id)
+                break
+            
+            elif isinstance(item, ConnectionItem):
+                reply = QMessageBox.question(
+                    self, "Delete Connection",
+                    "Delete this connection?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.Yes:
+                    # Need to get from/to ids from connection
+                    self.network_vm.remove_connection(
+                        item.start_node.layer_id, 
+                        item.end_node.layer_id
+                    )
+                break
 
     # ── project change ────────────────────────────────────────────────────────
 
