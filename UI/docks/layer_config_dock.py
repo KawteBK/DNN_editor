@@ -24,6 +24,9 @@ class LayerConfigDock(QDockWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+            
+
+
 
         self._form_widget = QWidget()
         self._layout = QFormLayout()
@@ -254,14 +257,16 @@ class LayerConfigDock(QDockWidget):
     # ── shared row helpers ────────────────────────────────────────────────────
 
     def _add_name_row(self, layer) -> None:
-        # ADDED: every layer shows its name and type at the top for orientation
-        self._layout.addRow(QLabel("Type:"),  QLabel(type(layer).__name__))
-        self._layout.addRow(QLabel("ID:"),    QLabel(layer._id))
-        name_field = QLineEdit(layer._name)
-        name_field.editingFinished.connect(
+            self._layout.addRow(QLabel("Type:"), QLabel(type(layer).__name__))
+            self._layout.addRow(QLabel("ID:"), QLabel(layer._id))
+            # Fix alignment - make labels right-aligned
+            name_label = QLabel("Name:")
+            name_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            name_field = QLineEdit(layer._name)
+            name_field.editingFinished.connect(
             lambda: self._push({"name": name_field.text()})
-        )
-        self._layout.addRow(QLabel("Name:"), name_field)
+            )
+            self._layout.addRow(name_label, name_field)
 
     def _add_shape_row(self, layer) -> None:
         # ADDED: shows the computed output shape as read-only info
@@ -292,16 +297,19 @@ class LayerConfigDock(QDockWidget):
     # ── field factories ───────────────────────────────────────────────────────
 
     def _make_int_field(self, value) -> QLineEdit:
-        f = QLineEdit(str(value))
+        f  = QLineEdit(str(value))
+        f.setMaximumWidth(150)  # Limit width
         return f
 
     def _make_float_field(self, value) -> QLineEdit:
         f = QLineEdit(str(value))
+        f.setMaximumWidth(150)
         return f
 
     def _make_tuple_field(self, value) -> QLineEdit:
         # Displays tuples as "3, 3" for easy editing
         f = QLineEdit(", ".join(str(v) for v in value))
+        f.setMaximumWidth(150)
         return f
 
     # ── safe parsers — never crash on bad user input ──────────────────────────
