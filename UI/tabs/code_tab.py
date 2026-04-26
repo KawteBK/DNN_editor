@@ -30,6 +30,14 @@ class CodeTab(QWidget):
     def set_code(self, code: str) -> None:
         self.code_editor.setPlainText(code)
 
+    def clear(self) -> None:
+        """Clears the code editor content and resets to placeholder."""
+        self.code_editor.clear()
+        # Optionally reset the placeholder text to the original message
+        self.code_editor.setPlaceholderText(
+             "# No project loaded.\n"
+            "# Use File → New Project or File → Open to get started."
+        )
 
     def _copy_code(self) -> None:
         clipboard = QApplication.clipboard()

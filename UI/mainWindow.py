@@ -271,7 +271,8 @@ class MainWindow(QMainWindow):
     
      # Clear the canvas
      self.canvas.clear_canvas()
-    
+     #clear the code tab as well
+     self.code_tab.clear()
      # Reset the code tab
      self.code_tab.set_code("")
      self.code_tab.code_editor.setPlaceholderText(
