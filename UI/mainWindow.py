@@ -122,6 +122,11 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.results_dock)
 
         # ── cross-VM wiring ───────────────────────────────────────────────────
+
+
+        self.training_vm.training_started.connect(self.canvas.start_training_animation)
+        self.training_vm.training_stopped.connect(self.canvas.stop_training_animation)
+
         # When a project loads, update the NetworkVM's network reference
         self.project_vm.project_changed.connect(self._on_project_changed)
 

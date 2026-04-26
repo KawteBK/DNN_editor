@@ -166,3 +166,15 @@ class CanvasView(QGraphicsView):
                 if isinstance(item, NodeItem):
                     self.network_vm.remove_layer(item.layer_id)
         super().keyPressEvent(event)
+
+        #for the animated connection
+
+    def start_training_animation(self):
+        """Start animation on all connections."""
+        for conn in self._connections.values():
+            conn.start_training_animation()
+
+    def stop_training_animation(self):
+        """Stop animation on all connections."""
+        for conn in self._connections.values():
+            conn.stop_training_animation()

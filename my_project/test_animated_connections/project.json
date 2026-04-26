@@ -1,0 +1,94 @@
+{
+  "name": "test_animated_connections",
+  "path": "/Users/kawterbekka/Desktop/ai_editor/my_project/test_animated_connections",
+  "network": {
+    "id": "test_animated_connections",
+    "layers": {
+      "input": {
+        "id": "input",
+        "name": "Input",
+        "role": "input",
+        "type": "InputLayer",
+        "inputShape": [
+          1,
+          28,
+          28
+        ],
+        "outputShape": [
+          1,
+          28,
+          28
+        ]
+      },
+      "flatten_1": {
+        "id": "flatten_1",
+        "name": "Flatten 1",
+        "role": "hidden",
+        "type": "Flatten",
+        "inputShape": [
+          1,
+          28,
+          28
+        ],
+        "outputShape": [
+          784
+        ]
+      },
+      "dense_1": {
+        "id": "dense_1",
+        "name": "Dense 1",
+        "role": "hidden",
+        "type": "Dense",
+        "inputShape": [
+          784
+        ],
+        "outputShape": [
+          128
+        ],
+        "unit": 128,
+        "useBias": true,
+        "dropout": 0.0
+      }
+    },
+    "connections": [
+      {
+        "id": "input->flatten_1",
+        "from": "input",
+        "to": "flatten_1"
+      },
+      {
+        "id": "flatten_1->dense_1",
+        "from": "flatten_1",
+        "to": "dense_1"
+      }
+    ]
+  },
+  "dataset": {
+    "id": "mnist",
+    "name": "mnist",
+    "inputShape": [
+      1,
+      28,
+      28
+    ],
+    "numClasses": 10,
+    "source": "builtin",
+    "builtinType": "mnist"
+  },
+  "trainingConfig": {
+    "batchSize": 32,
+    "epochs": 10,
+    "validationSplit": 0.2,
+    "shuffle": true,
+    "earlyStop": true
+  },
+  "networkConfig": {
+    "optimizer": "adam",
+    "loss": "cross_entropy",
+    "metrics": [
+      "accuracy"
+    ],
+    "learningRate": 0.001
+  },
+  "trainingLogs": {}
+}
