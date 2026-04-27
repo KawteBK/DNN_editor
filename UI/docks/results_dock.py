@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QDockWidget, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QGridLayout, QFrame, QSizePolicy,
+    QLabel, QSizePolicy, QTabWidget,
 )
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import Qt
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
@@ -10,8 +10,6 @@ from matplotlib.figure import Figure
 import numpy as np
 
 
-# Class name tables — used to label confusion matrix axes.
-# Keyed by BuiltinDataset.name (the enum's .name attribute, e.g. "FASHION_MNIST").
 _CLASS_NAMES = {
     "MNIST":         [str(i) for i in range(10)],
     "FASHION_MNIST": ["T-shirt", "Trouser", "Pullover", "Dress", "Coat",
@@ -25,311 +23,378 @@ _CLASS_NAMES = {
                       "Dog", "Horse", "Monkey", "Ship", "Truck"],
 }
 
+_BG      = "#2b2b2b"
+_SURFACE = "#3c3f41"
+_BORDER  = "#555555"
+_TEXT    = "#cccccc"
+_DIM     = "#888888"
+_TEAL    = "#1592A2"
+_ORANGE  = "#E67E22"
+_GREEN   = "#2ECC71"
 
-def _separator() -> QFrame:
-    """Thin horizontal rule — visual boundary between dock sections."""
-    line = QFrame()
-    line.setFrameShape(QFrame.Shape.HLine)
-    line.setStyleSheet("color: #444;")
-    return line
+
+def _make_stat_card(label: str, value: str = "—", value_color: str = _TEXT):
+    """Small surface card with a dim label + big bold value. Returns (widget, value_label)."""
+    card = QWidget()
+    card.setStyleSheet(f"background:{_SURFACE}; border-radius:6px;")
+    vl = QVBoxLayout(card)
+    vl.setContentsMargins(10, 8, 10, 8)
+    vl.setSpacing(2)
+    lbl = QLabel(label)
+    lbl.setStyleSheet(f"color:{_DIM}; font-size:11px; background:transparent;")
+    val = QLabel(value)
+    val.setStyleSheet(
+        f"color:{value_color}; font-size:17px; font-weight:bold; background:transparent;"
+    )
+    vl.addWidget(lbl)
+    vl.addWidget(val)
+    return card, val
+
+
+def _styled_fig(figsize=(5, 2.6)):
+    fig = Figure(figsize=figsize, facecolor=_BG)
+    canvas = FigureCanvasQTAgg(fig)
+    canvas.setStyleSheet(f"background:{_BG};")
+    return fig, canvas
+
+
+def _style_ax(ax, title: str = "") -> None:
+    ax.set_facecolor(_BG)
+    ax.set_title(title, color=_TEXT, fontsize=9, pad=4)
+    ax.tick_params(colors=_DIM, labelsize=7)
+    for spine in ax.spines.values():
+        spine.set_edgecolor(_BORDER)
+
+
+_TAB_STYLE = f"""
+    QTabWidget::pane {{ border:none; background:{_BG}; }}
+    QTabBar::tab {{
+        background:{_SURFACE}; color:{_DIM};
+        padding:5px 14px; border:none; font-size:12px;
+    }}
+    QTabBar::tab:selected {{
+        background:{_BG}; color:{_TEXT};
+        border-bottom:2px solid {_TEAL};
+    }}
+    QTabBar::tab:hover {{ color:{_TEXT}; }}
+"""
 
 
 class ResultsDock(QDockWidget):
+    """
+    Training monitoring panel — three tabs:
+
+      Monitor    — live epoch stats + loss/accuracy charts (updates each epoch)
+      Evaluation — held-out test-set scalar metrics (set once after training)
+      Confusion  — row-normalised confusion matrix heatmap (set once after training)
+
+    The dock auto-switches tabs:
+      • Training starts  → jump to Monitor
+      • Training ends    → jump to Evaluation
+    """
+
     def __init__(self):
-        super().__init__("Results")
+        super().__init__("Training Monitor")
 
-        # ── root scroll so the dock can hold all three sections ───────────────
-        # CHANGED: wrapped everything in a QVBoxLayout on a plain QWidget.
-        # Previously there was no scroll and the dock would clip content when
-        # the confusion matrix section was added.
-        root_widget = QWidget()
-        layout = QVBoxLayout(root_widget)
-        layout.setSpacing(8)
-        layout.setContentsMargins(6, 6, 6, 6)
-        self.setWidget(root_widget)
-
-        # ═══════════════════════════════════════════════════════════════════════
-        # SECTION 1 — Live training monitor (unchanged, updates every epoch)
-        # ═══════════════════════════════════════════════════════════════════════
-        monitor_label = QLabel("Training monitor")
-        monitor_label.setFont(self._bold_font(10))
-        layout.addWidget(monitor_label)
-
-        charts_layout = QHBoxLayout()
-        charts_layout.setSpacing(4)
-
-        self.loss_fig    = Figure(figsize=(4, 2.5))
-        self.loss_canvas = FigureCanvasQTAgg(self.loss_fig)
-        self.loss_ax     = self.loss_fig.add_subplot(111)
-        self.loss_ax.set_title("Loss")
-        charts_layout.addWidget(self.loss_canvas)
-
-        self.acc_fig    = Figure(figsize=(4, 2.5))
-        self.acc_canvas = FigureCanvasQTAgg(self.acc_fig)
-        self.acc_ax     = self.acc_fig.add_subplot(111)
-        self.acc_ax.set_title("Accuracy")
-        charts_layout.addWidget(self.acc_canvas)
-
-        layout.addLayout(charts_layout)
-
-        # Live stat row (epoch counter + last val metrics)
-        live_row = QGridLayout()
-        self.epoch_label   = QLabel("Epoch: --")
-        self.live_val_loss = QLabel("Val Loss: --")
-        self.live_val_acc  = QLabel("Val Acc: --")
-        self.live_val_loss.setFont(self._bold_font())
-        self.live_val_acc.setFont(self._bold_font())
-        live_row.addWidget(self.epoch_label,   0, 0)
-        live_row.addWidget(self.live_val_loss, 0, 1)
-        live_row.addWidget(self.live_val_acc,  0, 2)
-        layout.addLayout(live_row)
-
-        layout.addWidget(_separator())
-
-        # ═══════════════════════════════════════════════════════════════════════
-        # SECTION 2 — NEW: Final evaluation (populated ONCE after training ends)
-        # These labels show test-set metrics — the true generalisation estimate.
-        # They are intentionally separate from the live charts above.
-        # ═══════════════════════════════════════════════════════════════════════
-        eval_label = QLabel("Final evaluation  (held-out test set)")
-        eval_label.setFont(self._bold_font(10))
-        layout.addWidget(eval_label)
-
-        eval_grid = QGridLayout()
-        eval_grid.setHorizontalSpacing(16)
-
-        self.test_loss_label = QLabel("Test loss:")
-        self.test_loss_val   = QLabel("—")
-        self.test_acc_label  = QLabel("Test accuracy:")
-        self.test_acc_val    = QLabel("—")
-        self.test_f1_label   = QLabel("Test F1:")
-        self.test_f1_val     = QLabel("—")
-
-        # Style the value labels so they stand out
-        for lbl in [self.test_loss_val, self.test_acc_val, self.test_f1_val]:
-            lbl.setFont(self._bold_font())
-            lbl.setStyleSheet("color: #2ECC71;")
-
-        eval_grid.addWidget(self.test_loss_label, 0, 0)
-        eval_grid.addWidget(self.test_loss_val,   0, 1)
-        eval_grid.addWidget(self.test_acc_label,  1, 0)
-        eval_grid.addWidget(self.test_acc_val,    1, 1)
-        eval_grid.addWidget(self.test_f1_label,   2, 0)
-        eval_grid.addWidget(self.test_f1_val,     2, 1)
-        layout.addLayout(eval_grid)
-
-        # Hint shown before training is ever run
-        self._eval_hint = QLabel("Run training to see test-set evaluation.")
-        self._eval_hint.setStyleSheet("color: #888; font-size: 11px;")
-        layout.addWidget(self._eval_hint)
-
-        layout.addWidget(_separator())
-
-        # ═══════════════════════════════════════════════════════════════════════
-        # SECTION 3 — NEW: Confusion matrix (matplotlib imshow)
-        # Shown after training completes. Stays blank until then.
-        # ═══════════════════════════════════════════════════════════════════════
-        cm_label = QLabel("Confusion matrix  (test set)")
-        cm_label.setFont(self._bold_font(10))
-        layout.addWidget(cm_label)
-
-        # Square figure — size grows with number of classes but we cap the display
-        self.cm_fig    = Figure(figsize=(4.5, 4.5))
-        self.cm_canvas = FigureCanvasQTAgg(self.cm_fig)
-        self.cm_canvas.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
-        )
-        self.cm_canvas.setMinimumHeight(200)
-        layout.addWidget(self.cm_canvas)
-
-        self._cm_hint = QLabel("Confusion matrix appears here after training.")
-        self._cm_hint.setStyleSheet("color: #888; font-size: 11px;")
-        layout.addWidget(self._cm_hint)
-
-        layout.addStretch()
-
-        # ── internal history lists ────────────────────────────────────────────
+        self._dataset_key: str | None = None
         self._train_losses: list[float] = []
         self._val_losses:   list[float] = []
         self._val_accs:     list[float] = []
 
-        # Remember which dataset is active so we can label the confusion matrix
-        self._dataset_key: str | None = None
+        outer = QWidget()
+        outer.setStyleSheet(f"background:{_BG}; color:{_TEXT};")
+        root = QVBoxLayout(outer)
+        root.setContentsMargins(0, 0, 0, 0)
+        root.setSpacing(0)
+        self.setWidget(outer)
+
+        self._tabs = QTabWidget()
+      
+        self._tabs.setStyleSheet(_TAB_STYLE)
+        root.addWidget(self._tabs)
+        self._tabs.setElideMode(Qt.TextElideMode.ElideNone)
+        self._tabs.addTab(self._build_monitor_tab(),    "Monitor")
+        self._tabs.addTab(self._build_evaluation_tab(), "Evaluation")
+        self._tabs.addTab(self._build_confusion_tab(),  "Confusion")
+
+        self._tabs.setStyleSheet("""
+QTabBar::tab {
+    font-weight: bold;
+}
+""")
+
+    # ── tab builders ──────────────────────────────────────────────────────────
+
+    def _build_monitor_tab(self) -> QWidget:
+        tab = QWidget()
+        tab.setStyleSheet(f"background:{_BG};")
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(8)
+
+        # stat cards
+        row = QHBoxLayout()
+        row.setSpacing(6)
+        self._card_epoch,      self._val_epoch      = _make_stat_card("Epoch",      "— / —")
+        self._card_train_loss, self._val_train_loss  = _make_stat_card("Train loss", "—")
+        self._card_val_loss,   self._val_val_loss    = _make_stat_card("Val loss",   "—")
+        self._card_val_acc,    self._val_val_acc     = _make_stat_card("Val acc",    "—", _GREEN)
+        for c in [self._card_epoch, self._card_train_loss,
+                  self._card_val_loss, self._card_val_acc]:
+            row.addWidget(c)
+        layout.addLayout(row)
+
+        # charts
+        charts = QHBoxLayout()
+        charts.setSpacing(6)
+
+        self.loss_fig, self.loss_canvas = _styled_fig((4, 2.4))
+        self.loss_ax = self.loss_fig.add_subplot(111)
+        _style_ax(self.loss_ax, "Loss")
+        self.loss_fig.tight_layout(pad=0.8)
+        self.loss_canvas.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        self.acc_fig, self.acc_canvas = _styled_fig((4, 2.4))
+        self.acc_ax = self.acc_fig.add_subplot(111)
+        _style_ax(self.acc_ax, "Accuracy (%)")
+        self.acc_fig.tight_layout(pad=0.8)
+        self.acc_canvas.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
+        charts.addWidget(self.loss_canvas)
+        charts.addWidget(self.acc_canvas)
+        layout.addLayout(charts)
+
+        self._monitor_hint = QLabel("Charts will update live once training starts.")
+        self._monitor_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._monitor_hint.setStyleSheet(f"color:{_DIM}; font-size:11px;")
+        layout.addWidget(self._monitor_hint)
+        layout.addStretch()
+        return tab
+
+    def _build_evaluation_tab(self) -> QWidget:
+        tab = QWidget()
+        tab.setStyleSheet(f"background:{_BG};")
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(8, 12, 8, 8)
+        layout.setSpacing(8)
+
+        title = QLabel("Final evaluation — held-out test set")
+        title.setStyleSheet(
+            f"color:{_DIM}; font-size:11px; font-weight:bold; letter-spacing:1px;"
+        )
+        layout.addWidget(title)
+
+        row1 = QHBoxLayout()
+        row1.setSpacing(6)
+        self._eval_card_loss, self._eval_val_loss = _make_stat_card("Test loss",     "—", _ORANGE)
+        self._eval_card_acc,  self._eval_val_acc  = _make_stat_card("Test accuracy", "—", _GREEN)
+        self._eval_card_f1,   self._eval_val_f1   = _make_stat_card("F1 score",      "—", _TEAL)
+        row1.addWidget(self._eval_card_loss)
+        row1.addWidget(self._eval_card_acc)
+        row1.addWidget(self._eval_card_f1)
+        layout.addLayout(row1)
+
+        row2 = QHBoxLayout()
+        row2.setSpacing(6)
+        self._eval_card_prec, self._eval_val_prec = _make_stat_card("Precision", "—")
+        self._eval_card_rec,  self._eval_val_rec  = _make_stat_card("Recall",    "—")
+        row2.addWidget(self._eval_card_prec)
+        row2.addWidget(self._eval_card_rec)
+        row2.addStretch()
+        layout.addLayout(row2)
+
+        self._eval_hint = QLabel(
+            "Train the model to see test-set evaluation.\n"
+            "These metrics are computed once on data the model never saw during training."
+        )
+        self._eval_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._eval_hint.setWordWrap(True)
+        self._eval_hint.setStyleSheet(
+            f"color:{_DIM}; font-size:11px; padding:16px;"
+            f"background:{_SURFACE}; border-radius:6px;"
+        )
+        layout.addWidget(self._eval_hint)
+        layout.addStretch()
+        return tab
+
+    def _build_confusion_tab(self) -> QWidget:
+        tab = QWidget()
+        tab.setStyleSheet(f"background:{_BG};")
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+
+        title = QLabel("Confusion matrix — test set (row-normalised)")
+        title.setStyleSheet(
+            f"color:{_DIM}; font-size:11px; font-weight:bold; letter-spacing:1px;"
+        )
+        layout.addWidget(title)
+
+        self.cm_fig, self.cm_canvas = _styled_fig((5, 4.5))
+        self.cm_canvas.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.cm_canvas.setMinimumHeight(180)
+        layout.addWidget(self.cm_canvas)
+
+        self._cm_hint = QLabel("Confusion matrix appears here after training.")
+        self._cm_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._cm_hint.setStyleSheet(
+            f"color:{_DIM}; font-size:12px; padding:16px;"
+            f"background:{_SURFACE}; border-radius:6px;"
+        )
+        layout.addWidget(self._cm_hint)
+        layout.addStretch()
+        return tab
 
     # ── public API ────────────────────────────────────────────────────────────
 
     def set_dataset_key(self, key: str | None) -> None:
-        """
-        NEW — called by MainWindow._on_project_changed() so the confusion
-        matrix can label its axes with real class names instead of integers.
-        key is the BuiltinDataset enum's .name, e.g. "FASHION_MNIST".
-        """
         self._dataset_key = key
 
     def on_epoch(self, epoch: int, total: int, train_loss: float, val_metrics: dict) -> None:
-        """
-        Called by MainWindow every epoch via TrainingVM.epoch_progress signal.
-        Updates the live monitor section only — does NOT touch the evaluation section.
-        Unchanged in behaviour from original, labels renamed for clarity.
-        """
+        if epoch == 1:
+            self._tabs.setCurrentIndex(0)
+            self._monitor_hint.setVisible(False)
+
         self._train_losses.append(train_loss)
-        val_loss = val_metrics.get("loss", None)
-        val_acc  = val_metrics.get("accuracy", None)
+        val_loss = val_metrics.get("loss")
+        val_acc  = val_metrics.get("accuracy")
 
         if val_loss is not None:
             self._val_losses.append(val_loss)
         if val_acc is not None:
             self._val_accs.append(val_acc)
 
-        self.epoch_label.setText(f"Epoch: {epoch}/{total}")
+        # stat cards
+        self._val_epoch.setText(f"{epoch} / {total}")
+        self._val_train_loss.setText(f"{train_loss:.4f}")
+        if val_loss is not None:
+            self._val_val_loss.setText(f"{val_loss:.4f}")
+        if val_acc is not None:
+            self._val_val_acc.setText(f"{val_acc:.1f}%")
 
-        # Redraw loss chart
+        # loss chart
         self.loss_ax.clear()
-        self.loss_ax.set_title("Loss")
-        self.loss_ax.plot(self._train_losses, label="train", color="#1592A2")
+        _style_ax(self.loss_ax, "Loss")
+        self.loss_ax.plot(self._train_losses, label="train", color=_TEAL, linewidth=1.5)
         if self._val_losses:
-            self.loss_ax.plot(self._val_losses, label="val", color="#E67E22")
-        self.loss_ax.legend(fontsize=7)
-        self.loss_ax.tick_params(labelsize=7)
-        self.loss_fig.tight_layout()
+            self.loss_ax.plot(self._val_losses, label="val", color=_ORANGE, linewidth=1.5)
+        self.loss_ax.legend(
+            fontsize=7, facecolor=_SURFACE, edgecolor=_BORDER, labelcolor=_TEXT)
+        self.loss_fig.tight_layout(pad=0.8)
         self.loss_canvas.draw()
 
-        # Redraw accuracy chart
+        # accuracy chart
         self.acc_ax.clear()
-        self.acc_ax.set_title("Accuracy")
+        _style_ax(self.acc_ax, "Accuracy (%)")
         if self._val_accs:
-            self.acc_ax.plot(self._val_accs, label="val acc", color="#2ECC71")
-            self.acc_ax.legend(fontsize=7)
-        self.acc_ax.tick_params(labelsize=7)
-        self.acc_fig.tight_layout()
+            self.acc_ax.plot(self._val_accs, label="val", color=_GREEN, linewidth=1.5)
+            self.acc_ax.legend(
+                fontsize=7, facecolor=_SURFACE, edgecolor=_BORDER, labelcolor=_TEXT)
+        self.acc_fig.tight_layout(pad=0.8)
         self.acc_canvas.draw()
 
-        if val_loss is not None:
-            self.live_val_loss.setText(f"Val Loss: {val_loss:.4f}")
-        if val_acc is not None:
-            self.live_val_acc.setText(f"Val Acc: {val_acc:.1f}%")
-
     def on_training_finished(self, history: dict) -> None:
-        """
-        NEW — called by MainWindow._on_training_finished() after training ends.
-        Reads the "test_*" keys and "confusion_matrix" from the history dict
-        written by trainer.py and populates the evaluation and confusion matrix
-        sections.
-
-        WHY a separate method instead of folding this into on_epoch:
-        The test pass runs exactly once, after all epochs complete. on_epoch
-        is called once per epoch during training. Mixing them would require
-        special-casing the last epoch, which is fragile — especially with early
-        stopping where "last epoch" isn't known in advance.
-        """
-        # ── Section 2: scalar test metrics ────────────────────────────────────
         test_loss = history.get("test_loss")
         test_acc  = history.get("test_accuracy")
         test_f1   = history.get("test_f1_score")
+        test_prec = history.get("test_precision")
+        test_rec  = history.get("test_recall")
 
         if test_loss is not None:
             self._eval_hint.setVisible(False)
-            self.test_loss_val.setText(f"{test_loss:.4f}")
+            self._eval_val_loss.setText(f"{test_loss:.4f}")
         if test_acc is not None:
-            self.test_acc_val.setText(f"{test_acc:.1f}%")
+            self._eval_val_acc.setText(f"{test_acc:.1f}%")
         if test_f1 is not None:
-            self.test_f1_val.setText(f"{test_f1:.3f}")
+            self._eval_val_f1.setText(f"{test_f1:.3f}")
         else:
-            self.test_f1_val.setText("—  (not in metrics)")
+            self._eval_val_f1.setText("— n/a")
+        if test_prec is not None:
+            self._eval_val_prec.setText(f"{test_prec:.3f}")
+        if test_rec is not None:
+            self._eval_val_rec.setText(f"{test_rec:.3f}")
 
-        # ── Section 3: confusion matrix ───────────────────────────────────────
         cm = history.get("confusion_matrix")
         if cm:
             self._draw_confusion_matrix(cm)
 
+        if test_loss is not None:
+            self._tabs.setCurrentIndex(1)   # jump to Evaluation tab
+
     def clear(self) -> None:
-        """
-        Called by MainWindow._on_project_changed() when a new project loads.
-        Resets all three sections to their blank state.
-        CHANGED: also clears the evaluation and confusion matrix sections.
-        """
         self._train_losses.clear()
         self._val_losses.clear()
         self._val_accs.clear()
 
-        # Clear live monitor charts
-        for ax, canvas, title in [
-            (self.loss_ax, self.loss_canvas, "Loss"),
-            (self.acc_ax,  self.acc_canvas,  "Accuracy"),
+        for ax, fig, canvas, title in [
+            (self.loss_ax, self.loss_fig, self.loss_canvas, "Loss"),
+            (self.acc_ax,  self.acc_fig,  self.acc_canvas,  "Accuracy (%)"),
         ]:
             ax.clear()
-            ax.set_title(title)
+            _style_ax(ax, title)
+            fig.tight_layout(pad=0.8)
             canvas.draw()
 
-        self.epoch_label.setText("Epoch: --")
-        self.live_val_loss.setText("Val Loss: --")
-        self.live_val_acc.setText("Val Acc: --")
+        self._val_epoch.setText("— / —")
+        self._val_train_loss.setText("—")
+        self._val_val_loss.setText("—")
+        self._val_val_acc.setText("—")
+        self._monitor_hint.setVisible(True)
 
-        # Reset final evaluation labels
-        self.test_loss_val.setText("—")
-        self.test_acc_val.setText("—")
-        self.test_f1_val.setText("—")
+        self._eval_val_loss.setText("—")
+        self._eval_val_acc.setText("—")
+        self._eval_val_f1.setText("—")
+        self._eval_val_prec.setText("—")
+        self._eval_val_rec.setText("—")
         self._eval_hint.setVisible(True)
 
-        # Clear confusion matrix
         self.cm_fig.clear()
         self.cm_canvas.draw()
         self._cm_hint.setVisible(True)
 
+        self._tabs.setCurrentIndex(0)
+
     # ── private ───────────────────────────────────────────────────────────────
 
     def _draw_confusion_matrix(self, cm: list) -> None:
-        """
-        NEW — renders the confusion matrix using matplotlib imshow.
-
-        cm is a nested Python list (C×C) as produced by
-        sklearn.metrics.confusion_matrix and stored in history["confusion_matrix"].
-
-        WHY imshow instead of a table widget:
-          - Color intensity immediately shows where the errors concentrate.
-          - Scales to any number of classes without layout changes.
-          - Consistent with the matplotlib stack already used for the charts.
-
-        Normalises each row to [0, 1] so that per-class accuracy differences
-        don't drown out small classes — a class with 100 samples and 90 correct
-        shows the same shade as a class with 10,000 samples and 9,000 correct.
-        """
         self._cm_hint.setVisible(False)
         cm_array = np.array(cm, dtype=float)
-
-        # Row-normalise: divide each row by its sum so values are 0..1
         row_sums = cm_array.sum(axis=1, keepdims=True)
-        row_sums[row_sums == 0] = 1   # avoid divide-by-zero for empty classes
+        row_sums[row_sums == 0] = 1
         cm_norm = cm_array / row_sums
 
-        n_classes = cm_array.shape[0]
-        class_names = _CLASS_NAMES.get(self._dataset_key, [str(i) for i in range(n_classes)])
-        # Trim or pad label list to match actual matrix size
-        class_names = class_names[:n_classes]
-        while len(class_names) < n_classes:
-            class_names.append(str(len(class_names)))
+        n_classes   = cm_array.shape[0]
+        names       = _CLASS_NAMES.get(self._dataset_key, [str(i) for i in range(n_classes)])
+        names       = (names + [str(i) for i in range(n_classes)])[:n_classes]
 
         self.cm_fig.clear()
+        self.cm_fig.patch.set_facecolor(_BG)
         ax = self.cm_fig.add_subplot(111)
+        ax.set_facecolor(_BG)
 
         im = ax.imshow(cm_norm, interpolation="nearest", cmap="Blues", vmin=0, vmax=1)
-        self.cm_fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cb = self.cm_fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+        cb.ax.tick_params(colors=_DIM, labelsize=7)
 
-        # Axis labels — skip individual tick labels for large matrices (>20 classes)
         if n_classes <= 20:
             ax.set_xticks(range(n_classes))
             ax.set_yticks(range(n_classes))
-            ax.set_xticklabels(class_names, rotation=45, ha="right", fontsize=7)
-            ax.set_yticklabels(class_names, fontsize=7)
+            ax.set_xticklabels(names, rotation=45, ha="right", fontsize=7, color=_TEXT)
+            ax.set_yticklabels(names, fontsize=7, color=_TEXT)
         else:
             ax.set_xticks([])
             ax.set_yticks([])
 
-        ax.set_xlabel("Predicted", fontsize=8)
-        ax.set_ylabel("True", fontsize=8)
-        ax.set_title("Confusion matrix (row-normalised)", fontsize=9)
+        ax.set_xlabel("Predicted", fontsize=8, color=_DIM)
+        ax.set_ylabel("True",      fontsize=8, color=_DIM)
+        ax.set_title("Row-normalised  (diagonal = correct)", fontsize=8, color=_TEXT, pad=6)
+        ax.tick_params(colors=_DIM)
+        for spine in ax.spines.values():
+            spine.set_edgecolor(_BORDER)
 
-        # Annotate each cell with its raw count — only for small matrices
         if n_classes <= 15:
             thresh = cm_norm.max() / 2.0
             for i in range(n_classes):
@@ -340,12 +405,5 @@ class ResultsDock(QDockWidget):
                         color="white" if cm_norm[i, j] > thresh else "black",
                     )
 
-        self.cm_fig.tight_layout()
+        self.cm_fig.tight_layout(pad=0.8)
         self.cm_canvas.draw()
-
-    @staticmethod
-    def _bold_font(size: int = 9) -> QFont:
-        f = QFont()
-        f.setBold(True)
-        f.setPointSize(size)
-        return f
