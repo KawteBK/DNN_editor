@@ -42,10 +42,12 @@ class Project:
         project = cls(name=data["name"], path=data["path"])
         # each of these will call fromDict on the respective class
         # once Network, Dataset, etc. implement it
-        project.network = Network.fromDict(data.get("network", {}))
-        project.dataset = Dataset.fromDict(data.get("dataset", {}))
-        project.trainingConfig = TrainingConfig.fromDict(data.get("trainingConfig", {}))
-        project.networkConfig = NetworkConfig.fromDict(data.get("networkConfig", {}))
+        project.network = Network.fromDict(data.get("network") or {})
+        project.dataset = Dataset.fromDict(data.get("dataset") or {})
+        tc_data = data.get("trainingConfig") or {}
+        project.trainingConfig = TrainingConfig.fromDict(tc_data) if tc_data else None
+        nc_data = data.get("networkConfig") or {}
+        project.networkConfig = NetworkConfig.fromDict(nc_data) if nc_data else None
         project.trainingLogs = data.get("trainingLogs", {})
         return project
 
