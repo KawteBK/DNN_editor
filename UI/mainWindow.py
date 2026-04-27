@@ -116,6 +116,21 @@ class MainWindow(QMainWindow):
         tabs.addTab(self.inference_tab, "Inference")
         self.setCentralWidget(tabs)
 
+
+        #style for teh tabs! sorry you were too ugly
+
+        tabs.setStyleSheet("""
+    QTabBar::tab {
+        font-size: 13px;
+        font-weight: bold;
+        padding: 8px 16px;
+        min-width: 80px;
+    }
+    QTabBar::tab:selected {
+        background-color: #3c3f41;
+    }
+""")
+
         # ── docks ─────────────────────────────────────────────────────────────
         self.palette_dock       = LayerPaletteDock(self.network_vm)
         self.config_dock        = LayerConfigDock(self.network_vm)
@@ -174,6 +189,8 @@ class MainWindow(QMainWindow):
 
         # Network changes → regenerate code tab
         self.network_vm.network_changed.connect(self._refresh_code_tab)
+        tabs.currentChanged.connect(self._on_tab_changed)
+        self.setCentralWidget(tabs)
 
         # ── start with a empty project ────────────────────────────────────────
         self.project_vm._project = None 
@@ -287,6 +304,12 @@ class MainWindow(QMainWindow):
         if project.dataset and project.networkConfig:
           self._refresh_code_tab()
         self._update_train_button_state()
+
+
+    def _on_tab_changed(self, index: int):
+        """Refresh code tab when selected."""
+        if index == 1:  # Code tab index
+            self._refresh_code_tab()
 
 
     # ── training lifecycle ────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QTextEdit, QPushButton, QApplication
-
+from PyQt6.QtCore import QTimer
 
 class CodeTab(QWidget):
     def __init__(self):
@@ -42,3 +42,10 @@ class CodeTab(QWidget):
     def _copy_code(self) -> None:
         clipboard = QApplication.clipboard()
         clipboard.setText(self.code_editor.toPlainText())
+            # Show feedback cue we are chalent
+        self.btn_copy.setText("✓ Copied!")
+        QTimer.singleShot(1500, lambda: self.btn_copy.setText("Copy code"))
+
+  
+    
+   

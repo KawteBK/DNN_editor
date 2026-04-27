@@ -33,6 +33,8 @@ _ORANGE  = "#E67E22"
 _GREEN   = "#2ECC71"
 
 
+
+
 def _make_stat_card(label: str, value: str = "—", value_color: str = _TEXT):
     """Small surface card with a dim label + big bold value. Returns (widget, value_label)."""
     card = QWidget()
@@ -118,10 +120,22 @@ class ResultsDock(QDockWidget):
         self._tabs.addTab(self._build_confusion_tab(),  "Confusion")
 
         self._tabs.setStyleSheet("""
-QTabBar::tab {
-    font-weight: bold;
-}
+    QTabBar::tab {
+        font-size: 13px;
+        font-weight: bold;
+        padding: 8px 16px;
+        min-width: 80px;
+    }
+    QTabBar::tab:selected {
+        background-color: #3c3f41;
+    }
 """)
+
+#         ("""
+# QTabBar::tab {
+#     font-weight: bold;
+# }
+# """)
 
     # ── tab builders ──────────────────────────────────────────────────────────
 
