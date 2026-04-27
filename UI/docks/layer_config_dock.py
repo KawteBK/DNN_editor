@@ -5,8 +5,8 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 
 from Core.layer import (
-    Dense, Conv2D, Pooling, Recurrent, Flatten, Activation, InputLayer,
-    ActivationType, PoolingType, RecurrentType, DropoutStyle,
+    Dense, Conv2D, MergeMode, Pooling, Recurrent, Flatten, Activation, InputLayer,
+    ActivationType, PoolingType, RecurrentType, DropoutStyle,Merge
 )
 
 
@@ -49,7 +49,7 @@ class LayerConfigDock(QDockWidget):
 
         if layer is None:
             self._show_placeholder()
-            return
+            return 
 
         if isinstance(layer, InputLayer):
             self._build_input_form(layer)
@@ -65,9 +65,10 @@ class LayerConfigDock(QDockWidget):
             self._build_flatten_form(layer)
         elif isinstance(layer, Activation):
             self._build_activation_form(layer)
+        elif isinstance(layer, Merge):
+            self._build_merge_form(layer)
 
-    # ── form builders — one per layer type ───────────────────────────────────
-
+    # ── form builders — one per layer type
     def _build_input_form(self, layer) -> None:
         # InputLayer is locked — show info only, no editable fields
         self._suppress_signals=True
@@ -251,6 +252,25 @@ class LayerConfigDock(QDockWidget):
         )
         self._layout.addRow(QLabel("Activation:"), at_combo)
 
+        self._add_shape_row(layer)
+        self._suppress_signals=False
+
+
+    def _build_merge_form(self, layer):
+        self._suppress_signals=True
+        self._add_name_row(layer)
+    
+        # Merge mode combo box
+        mode_combo = QComboBox()
+        mode_combo.addItems(["Add (element-wise sum)", "Concatenate (along last dim)"])
+        mode_combo.setCurrentIndex(0 if layer._mergeMode == MergeMode.ADD else 1)
+        mode_combo.currentIndexChanged.connect(
+            lambda i: self._push({"mergeMode": [MergeMode.ADD, MergeMode.CONCATENATE][i]})
+        )
+        self._layout.addRow(QLabel("Merge mode:"), mode_combo)
+        self._layout.addRow(QLabel(""), QLabel("Add: all input shapes must match exactly"))
+        self._layout.addRow(QLabel(""), QLabel("Concatenate: all dims except last must match"))
+    
         self._add_shape_row(layer)
         self._suppress_signals=False
 

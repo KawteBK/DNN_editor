@@ -18,7 +18,7 @@ class LayerPaletteDock(QDockWidget):
         # "Convolutionnel" -> "Conv2D", "Sigmoid" removed (it's an Activation type,
         # not a layer — Activation with type=SIGMOID is handled in config dock).
         # Flatten and Activation added since they exist in Core but were missing.
-        layers = ["Dense", "Conv2D", "Pooling", "Recurrent", "Flatten", "Activation"]
+        layers = ["Dense", "Conv2D", "Pooling", "Recurrent", "Flatten", "Merge", "Activation"]
 
         for layer_type in layers:
             btn = QPushButton(layer_type)

@@ -6,13 +6,14 @@ from PyQt6.QtCore import QRectF
 
 # Color per layer type — makes different layers visually distinct on the canvas
 LAYER_COLORS = {
-    "InputLayer":  ("#2ECC71", "#1A7A43"),   # green  — always the root
+    "InputLayer":  ("#2ECC71", "#1A7A43"),   # green   always the root
     "Dense":       ("#1592A2", "#105860"),   # teal
     "Conv2D":      ("#7F77DD", "#4A4490"),   # purple
     "Pooling":     ("#E67E22", "#9A5515"),   # amber
     "Recurrent":   ("#D85A30", "#8C3515"),   # coral
-    "Flatten":     ("#B29928", "#906E00"),   # yellowish
+    "Flatten":     ("#B29928", "#906E00"),   # yellowish , 5ra vibezzz
     "Activation":  ("#D4537E", "#8C2E4F"),   # pink
+    "Merge":       ("#956AA6", "#6C3483"),   #purpley-pink, twilight sparkle vibes
 }
 DEFAULT_COLOR = ("#1592A2", "#105860")
 

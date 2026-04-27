@@ -5,7 +5,7 @@ from Core.network import Network
 from Core.layer import (
     Layer, InputLayer, Dense, Conv2D, Pooling, Recurrent,
     Flatten, Activation,
-    ActivationType, PoolingType, RecurrentType, DropoutStyle,
+    ActivationType, PoolingType, RecurrentType, DropoutStyle,Merge, MergeMode
 )
 
 
@@ -299,5 +299,13 @@ class NetworkVM(QObject):
         elif layer_type == "Activation":
             return Activation(activationType=ActivationType.RELU,
                               id=lid, name=name, role="hidden")
+
+        elif layer_type == "Merge":
+             return Merge(
+            id=lid, 
+            name=name, 
+            role="merge",
+            mergeMode=MergeMode.ADD  # Default to ADD
+    )
 
         return None

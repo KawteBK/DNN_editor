@@ -1,7 +1,7 @@
 import sys
 import os
 try:
-    import winsound  # Windows only
+    import winsound # Windows only
 except:
     pass
 
@@ -215,7 +215,7 @@ class MainWindow(QMainWindow):
         """Opens a dialog to choose layer type and adds it to canvas."""
         from PyQt6.QtWidgets import QInputDialog
     
-        layer_types = ["Dense", "Conv2D", "Pooling", "Recurrent", "Flatten", "Activation"]
+        layer_types = ["Dense", "Conv2D", "Pooling", "Recurrent", "Flatten", "Activation", "Merge"]
         layer_type, ok = QInputDialog.getItem(
             self, "Add Layer", "Select layer type:", layer_types, 0, False
         )

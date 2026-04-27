@@ -1,4 +1,5 @@
 from Core.project import Project
+import network
 
 
 
@@ -180,39 +181,46 @@ class RecurrentWrapper(nn.Module):
         return output if self.return_seq else output[:, -1, :]'''
 
     @staticmethod
+    @staticmethod
     def _gen_model(data: dict) -> str:
         """
-        Generates the Model class.
-
-        Walks layers in topological order (reconstructed from the connections
-        list), skips InputLayer, and calls _layer_to_code() on each one.
-        The result is an nn.Sequential assembled inside __init__.
+        Generates a Model class that handles Merge layers properly.
+        For networks without Merge: uses nn.Sequential
+        For networks with Merge: uses functional forward() with multiple branches
         """
         network = data.get("network", {})
         layers_dict = network.get("layers", {})
         ordered_ids = data["_ordered_ids"]
+    
+        # Check if network has any Merge layers
+        has_merge = any(layers_dict[lid]["type"] == "Merge" for lid in ordered_ids)
+    
+        if not has_merge:
+            # Simple Sequential model (original behavior)
+            module_lines = []
+            for lid in ordered_ids:
+                ldata = layers_dict[lid]
+                if ldata["type"] == "InputLayer":
+                    continue
+                code = PyTorchCodeGenerator._layer_to_code(ldata)
+                if code:
+                    module_lines.append(f"            {code},  # {ldata['name']}")
+        
+            modules_block = "\n".join(module_lines)
+            return f'''\
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.net = nn.Sequential(
+    {modules_block}
+            )
 
-        module_lines = []
-        for lid in ordered_ids:
-            ldata = layers_dict[lid]
-            if ldata["type"] == "InputLayer":
-                continue
-            code = PyTorchCodeGenerator._layer_to_code(ldata)
-            if code:  # Activation(LINEAR) returns empty string
-                module_lines.append(f"            {code},  # {ldata['name']}")
-
-        modules_block = "\n".join(module_lines)
-
-        return f'''\
-class Model(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.net = nn.Sequential(
-{modules_block}
-        )
-
-    def forward(self, x):
-        return self.net(x)'''
+        def forward(self, x):
+            return self.net(x)'''
+    
+        else:
+            # Functional API model for networks with Merge layers
+            return PyTorchCodeGenerator._gen_functional_model(data, layers_dict, ordered_ids)
 
     @staticmethod
     def _gen_dataset(data: dict) -> str:
@@ -437,6 +445,12 @@ if __name__ == "__main__":
 
         elif t == "Flatten":
             return "nn.Flatten(start_dim=1)"
+        elif t == "Merge":
+             # Merge layers can't be in nn.Sequential because they need multiple inputs
+             # Return a comment instead - the user must implement this manually
+            merge_mode = ldata.get("mergeMode", "add")
+            return f"# MERGE LAYER ({merge_mode}) - requires functional API, implement manually"
+
 
         elif t == "Dense":
             in_f  = ldata["inputShape"][0]
@@ -494,4 +508,104 @@ if __name__ == "__main__":
 
         return ""
 
+
+    @staticmethod
+    def _gen_functional_model(data: dict, layers_dict: dict, ordered_ids: list) -> str:
+        """
+        Generates a Model with functional forward() that supports multi-input Merge layers.
+        """
+        # First, collect all connections to understand the graph
+        connections = data.get("network", {}).get("connections", [])
+    
+        # Build adjacency: for each layer, what are its parents
+        parents_map = {}
+        for conn in connections:
+            to_layer = conn["to"]
+            from_layer = conn["from"]
+            if to_layer not in parents_map:
+                parents_map[to_layer] = []
+            parents_map[to_layer].append(from_layer)
+    
+        # Generate __init__ code for all layers
+        init_lines = []
+        for lid in ordered_ids:
+            ldata = layers_dict[lid]
+            if ldata["type"] == "InputLayer":
+                continue
+        
+            # Convert to PyTorch layer
+            layer_code = PyTorchCodeGenerator._layer_to_code(ldata)
+            if layer_code and not layer_code.startswith("#"):  # Skip comments
+                # Handle multi-line layer code (like RecurrentWrapper)
+                layer_code = layer_code.replace("\n", "\n        ")
+                init_lines.append(f"        self.{lid} = {layer_code}")
+    
+        init_block = "\n".join(init_lines)
+    
+        # Generate forward pass with connections
+        forward_lines = []
+        forward_lines.append("    def forward(self, x):")
+        forward_lines.append("        # Store outputs of each layer")
+        forward_lines.append("        outputs = {}")
+        forward_lines.append("        outputs['input'] = x")
+        forward_lines.append("")
+    
+        for lid in ordered_ids:
+            ldata = layers_dict[lid]
+            if ldata["type"] == "InputLayer":
+                continue
+        
+            parents = parents_map.get(lid, [])
+        
+            if ldata["type"] == "Merge":
+                # Merge layer - combine multiple parent outputs
+                merge_mode = ldata.get("mergeMode", "add")
+            
+                if len(parents) < 2:
+                    forward_lines.append(f"        # WARNING: Merge layer '{lid}' has only {len(parents)} parent(s)")
+            
+                # Collect parent output tensors
+                parent_tensors = [f"outputs['{p}']" for p in parents]
+            
+                if merge_mode == "add":
+                    # Element-wise sum
+                    combine = " + ".join(parent_tensors)
+                    forward_lines.append(f"        outputs['{lid}'] = {combine}  # {ldata['name']}")
+                else:  # concatenate
+                    # Concatenate along last dimension
+                    combine = f"torch.cat([{', '.join(parent_tensors)}], dim=-1)"
+                    forward_lines.append(f"        outputs['{lid}'] = {combine}  # {ldata['name']}")
+            else:
+                # Normal layer - single parent
+                if not parents:
+                    forward_lines.append(f"        # WARNING: Layer '{lid}' has no parents - skipping")
+                    continue
+            
+                parent = parents[0]  # Take first parent
+                forward_lines.append(f"        outputs['{lid}'] = self.{lid}(outputs['{parent}'])  # {ldata['name']}")
+    
+        # Find output layer (last layer with no children)
+        children_map = {}
+        for conn in connections:
+            from_layer = conn["from"]
+            to_layer = conn["to"]
+            if from_layer not in children_map:
+                children_map[from_layer] = []
+            children_map[from_layer].append(to_layer)
+    
+        output_layers = [lid for lid in layers_dict if lid not in children_map and lid != "input"]
+        if output_layers:
+            forward_lines.append(f"        return outputs['{output_layers[0]}']")
+        else:
+            forward_lines.append("        return outputs")
+    
+        forward_block = "\n".join(forward_lines)
+    
+        return f'''\
+    class Model(nn.Module):
+        def __init__(self):
+            super().__init__()
+    {init_block}
+
+    {forward_block}'''
     

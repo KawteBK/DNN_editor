@@ -5,9 +5,9 @@ from Core.layer import (
     Conv2D, DropoutStyle,
     Dense,
     Flatten,
-    InputLayer,
+    InputLayer, Merge,
     Pooling, PoolingType,
-    Recurrent, RecurrentType,
+    Recurrent, RecurrentType,Merge
 )
 from Core.network import Network
 
@@ -113,6 +113,8 @@ class PyTorchModelBuilder:
 
         elif isinstance(layer, Activation):
             return PyTorchModelBuilder._build_activation(layer)
+        elif isinstance(layer, Merge):  
+            return PyTorchModelBuilder._build_merge(layer)
 
         else:
             raise ValueError(f"Unknown layer type: {type(layer).__name__}")
@@ -272,3 +274,13 @@ class PyTorchModelBuilder:
             return []   # no-op — linear activation = identity, no module needed
         else:
             raise ValueError(f"Unknown activation type: {t}")
+
+    @staticmethod
+    def _build_merge(layer) -> list[nn.Module]:
+        """
+        Merge layers are handled in the forward pass, not as standalone modules.
+        Return an empty list - they will be implemented in the functional forward.
+        """
+        # Merge layers are NOT added as nn.Module children
+        # They are implemented directly in the forward() method
+        return []
