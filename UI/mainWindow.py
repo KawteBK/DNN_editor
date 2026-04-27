@@ -297,10 +297,58 @@ class MainWindow(QMainWindow):
         self._timer.start()
         self.statusBar().showMessage("Training…")
 
+        # DISABLE ALL GRAPH EDITING ACTIONS
+        # Palette dock buttons
+        self.palette_dock.setEnabled(False)
+    
+        # Canvas interaction
+        self.canvas.setEnabled(False)
+    
+        # Config docks - disable editing
+        self.config_dock.setEnabled(False)
+        self.network_config_dock.setEnabled(False)
+    
+        # Dataset dock - disable changes during training
+        self.dataset_dock.setEnabled(False)
+    
+        # Disable add/delete buttons in toolbar
+        for action in self.findChildren(QPushButton):
+            if action.text() in ["Add", "Delete"]:
+                action.setEnabled(False)
+    
+        # Disable File menu actions that modify state
+        file_menu = self.menuBar().findChild(type("QMenu"), "File")
+        if file_menu:
+            for action in file_menu.actions():
+                if action.text() in ["New project", "Open"]:
+                    action.setEnabled(False)
+
+
     def _on_training_stopped(self):
         self.btn_train.setEnabled(True)
         self.btn_stop.setEnabled(False)
         self._timer.stop()
+
+
+        # RE-ENABLE ALL UI
+        self.palette_dock.setEnabled(True)
+        self.canvas.setEnabled(True)
+        self.config_dock.setEnabled(True)
+        self.network_config_dock.setEnabled(True)
+        self.dataset_dock.setEnabled(True)
+    
+        for action in self.findChildren(QPushButton):
+            if action.text() in ["Add", "Delete"]:
+                action.setEnabled(True)
+    
+        file_menu = self.menuBar().findChild(type("QMenu"), "File")
+        if file_menu:
+                for action in file_menu.actions():
+                    if action.text() in ["New project", "Open"]:
+                        action.setEnabled(True)
+    
+        self._update_train_button_state()
+    #finished the reenabling :P
 
     def _on_training_finished(self, project):
         # Write the updated project (logs + weightsPath) back and save
