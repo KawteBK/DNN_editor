@@ -1,4 +1,5 @@
 import sys
+
 import os
 try:
     import winsound # Windows only
@@ -476,6 +477,54 @@ class MainWindow(QMainWindow):
 
 
 
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = MainWindow()
+    window.show()
+    sys.exit(app.exec())
+
+
+
+
+
+    #  enhance status message method
+    def _show_status(self, message: str, duration_ms: int = 3000):
+        """Show status message with optional beep for important messages."""
+        self.statusBar().showMessage(message, duration_ms)
+        # Optional: beep for important messages
+        if "saved" in message.lower() or "complete" in message.lower():
+            try:
+                winsound.MessageBeep(winsound.MB_ICONINFORMATION)
+            except:
+                pass
+
+    def closeEvent(self, event):
+        """Show confirmation dialog before quitting."""
+        if self.training_vm.is_training:
+            reply = QMessageBox.question(
+                self, "Training in Progress",
+                "Training is currently running.\nQuitting will stop training.\nAre you sure?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                event.ignore()
+                return
+    
+        if self.project_vm.project:
+            reply = QMessageBox.question(
+                self, "Exit",
+                "Do you want to save before exiting?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._on_save()
+            elif reply == QMessageBox.StandardButton.Cancel:
+                event.ignore()
+                return
+    
+        event.accept()
+
+        
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = MainWindow()

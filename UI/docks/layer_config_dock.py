@@ -2,7 +2,7 @@ from PyQt6.QtWidgets import (
     QDockWidget, QWidget, QFormLayout, QLabel,
     QLineEdit, QCheckBox, QComboBox, QScrollArea, QVBoxLayout
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QTimer, Qt
 
 from Core.layer import (
     Dense, Conv2D, MergeMode, Pooling, Recurrent, Flatten, Activation, InputLayer,
@@ -351,3 +351,24 @@ class LayerConfigDock(QDockWidget):
             return tuple(int(v.strip()) for v in text.split(","))
         except (ValueError, AttributeError):
             return fallback
+        
+
+
+        # Adding  visual feedback for config changes 
+
+    def _flash_field(self, field: QWidget):
+        """Temporarily highlight a field to show value was applied."""
+        original_bg = field.styleSheet()
+        field.setStyleSheet("background-color: #2ECC71; border: 1px solid #27AE60;")
+        QTimer.singleShot(200, lambda: field.setStyleSheet(original_bg))
+
+    def _push(self, params: dict) -> None:
+        if self._current_layer_id is None:
+            return
+    
+        # Find which widget was changed and flash it
+        sender = self.sender()
+        if sender and isinstance(sender, QLineEdit):
+            self._flash_field(sender)
+    
+        self.network_vm.update_layer_params(self._current_layer_id, params)
