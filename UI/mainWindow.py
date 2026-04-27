@@ -152,6 +152,8 @@ class MainWindow(QMainWindow):
 
         self.training_vm.training_started.connect(self.canvas.start_training_animation)
         self.training_vm.training_stopped.connect(self.canvas.stop_training_animation)
+        #self.project_vm.dataset_changed.connect(self._update_train_button_state) #enable the train button when dataset is set, since it's required to train duh
+
 
         # When a project loads, update the NetworkVM's network reference
         self.project_vm.project_changed.connect(self._on_project_changed)
@@ -451,6 +453,7 @@ class MainWindow(QMainWindow):
        """Enable/disable Train button based on project readiness."""
        if self.project_vm.project and self.project_vm.project.isReadyToTrain():
           self.btn_train.setEnabled(True)
+          self.btn_train.setToolTip("") 
        else:
         self.btn_train.setEnabled(False)
         # Optionally show tooltip explaining why

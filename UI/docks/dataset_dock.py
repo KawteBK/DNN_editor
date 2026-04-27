@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QDockWidget, QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton
 )
+from matplotlib.pylab import info
 
 from Core.dataset import BuiltinDataset
 
@@ -63,10 +64,14 @@ class DatasetDock(QDockWidget):
 
     def _on_selection_changed(self, display_name: str) -> None:
         self._update_labels(display_name)
-        # ADDED: tell ProjectVM so project.dataset is updated
         info = _DISPLAY_INFO.get(display_name)
         if info:
-            self.project_vm.set_dataset(info[5])   # info[5] is the BuiltinDataset enum
+            self.project_vm.set_dataset(info[5])
+            #  find the main window and update train button
+            main_window = self.window()
+            if hasattr(main_window, '_update_train_button_state'):
+                main_window._update_train_button_state()
+
 
     def _update_labels(self, display_name: str) -> None:
         info = _DISPLAY_INFO.get(display_name)
