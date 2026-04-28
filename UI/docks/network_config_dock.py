@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import (
-    QDockWidget, QWidget, QFormLayout, QLabel,
+    QDockWidget, QScrollArea, QVBoxLayout, QWidget, QFormLayout, QLabel,
     QLineEdit, QComboBox, QCheckBox
 )
 
@@ -22,6 +22,8 @@ class NetworkConfigDock(QDockWidget):
 
         widget = QWidget()
         layout = QFormLayout()
+    
+
 
         self.epochs     = QLineEdit("10")
         self.batch_size = QLineEdit("32")
@@ -60,7 +62,10 @@ class NetworkConfigDock(QDockWidget):
         layout.addRow(QLabel("Shuffle:"),           self.shuffle)
 
         widget.setLayout(layout)
-        self.setWidget(widget)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(widget)
+        self.setWidget(scroll)
 
         # ADDED: connect every field so project_vm stays in sync as the user types
         self.epochs.editingFinished.connect(self._push)

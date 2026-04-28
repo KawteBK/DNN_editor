@@ -18,11 +18,11 @@ class CodeTab(QWidget):
             "# Build a valid network and select a dataset to generate code."
         )
 
-        btn_copy = QPushButton("Copy code")
-        btn_copy.clicked.connect(self._copy_code)
+        self.btn_copy = QPushButton("Copy code")
+        self.btn_copy.clicked.connect(self._copy_code)
 
         layout.addWidget(self.code_editor)
-        layout.addWidget(btn_copy)
+        layout.addWidget(self.btn_copy)
         self.setLayout(layout)
 
     # ADDED: called by MainWindow._refresh_code_tab() whenever network_changed fires.
