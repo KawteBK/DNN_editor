@@ -44,20 +44,19 @@ class MainWindow(QMainWindow):
         # ── menu bar ──────────────────────────────────────────────────────────
         menubar = self.menuBar()
 
-        file_menu = menubar.addMenu("File")
-        file_menu.addAction("New project",  self._on_new)
-        file_menu.addAction("Open", self._on_open)
-        file_menu.addAction("Save", self._on_save)
+        self._file_menu = menubar.addMenu("File")
+        self._file_menu.addAction("New project", self._on_new)
+        self._file_menu.addAction("Open",        self._on_open)
+        self._file_menu.addAction("Save",        self._on_save)
 
-        edit_menu = menubar.addMenu("Edit")
-        edit_menu.addAction("Undo")   # stubs — wired later
-        edit_menu.addAction("Redo")
+        self._edit_menu = menubar.addMenu("Edit")
+        self._edit_menu.addAction("Undo")   # stubs — wired later
+        self._edit_menu.addAction("Redo")
 
-        window_menu=menubar.addMenu("Window")
-        
+        window_menu = menubar.addMenu("Window")
 
-        train_menu = menubar.addMenu("Train")
-        train_menu.addAction("Start Training", self._on_train)
+        self._train_menu = menubar.addMenu("Train")
+        self._train_menu.addAction("Start Training", self._on_train)
 
         menubar.addMenu("About")
         menubar.addMenu("Settings")
@@ -110,9 +109,7 @@ class MainWindow(QMainWindow):
         tabs = QTabWidget()
         self.canvas   = NetworkTab(self.network_vm)
         self.code_tab = CodeTab()
-        self.inference_tab = OngletInference()
-        self.inference_tab.set_project_vm(self.project_vm)
-
+        self.inference_tab = OngletInference(self.project_vm)
         tabs.addTab(self.canvas, "Network")
         tabs.addTab(self.code_tab, "Code")
         tabs.addTab(self.inference_tab, "Inference")
@@ -191,8 +188,6 @@ class MainWindow(QMainWindow):
 
         # Network changes → regenerate code tab
         self.network_vm.network_changed.connect(self._refresh_code_tab)
-        # Fix 9 — re-evaluate Train button whenever the graph changes
-        self.network_vm.network_changed.connect(self._update_train_button_state)
         tabs.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(tabs)
 
@@ -305,14 +300,6 @@ class MainWindow(QMainWindow):
         self.dataset_dock.load_from_project(project)
         self.network_config_dock.load_from_project(project)
         self.results_dock.clear()
-        # Fix 8 — keep confusion-matrix class labels in sync with the dataset
-        if project.dataset is not None:
-            self.results_dock.set_dataset_key(
-                project.dataset._builtinType.value.upper()
-                if project.dataset._builtinType is not None else None
-            )
-        else:
-            self.results_dock.set_dataset_key(None)
         if project.dataset and project.networkConfig:
           self._refresh_code_tab()
         self._update_train_button_state()
@@ -352,11 +339,9 @@ class MainWindow(QMainWindow):
                 action.setEnabled(False)
     
         # Disable File menu actions that modify state
-        file_menu = self.menuBar().findChild(type("QMenu"), "File")
-        if file_menu:
-            for action in file_menu.actions():
-                if action.text() in ["New project", "Open"]:
-                    action.setEnabled(False)
+        for action in self._file_menu.actions():
+            if action.text() in ["New project", "Open"]:
+                action.setEnabled(False)
 
 
     def _on_training_stopped(self):
@@ -376,15 +361,12 @@ class MainWindow(QMainWindow):
             if action.text() in ["Add", "Delete"]:
                 action.setEnabled(True)
     
-        file_menu = self.menuBar().findChild(type("QMenu"), "File")
-        if file_menu:
-                for action in file_menu.actions():
-                    if action.text() in ["New project", "Open"]:
-                        action.setEnabled(True)
+        for action in self._file_menu.actions():
+            if action.text() in ["New project", "Open"]:
+                action.setEnabled(True)
     
         self._update_train_button_state()
     #finished the reenabling :P
-
 
     def _update_training_time(self):
         elapsed = self.training_vm.elapsed_seconds()
@@ -401,8 +383,6 @@ class MainWindow(QMainWindow):
         self.project_vm._project = project
         self.project_vm.save()
         elapsed = self.training_vm.elapsed_seconds()
-        self.results_dock.on_training_finished(project.trainingLogs)
-
     
         # Play sound
         try:
@@ -457,74 +437,42 @@ class MainWindow(QMainWindow):
 
 
     def _update_ui_for_no_project(self):
-     """Disables all UI elements that depend on having an active project."""
-     # Disable toolbar buttons
-     self.btn_train.setEnabled(False)
-     self.btn_stop.setEnabled(False)  # already disabled by default
-    
-     # Disable menu actions
-     for menu_name in ["File", "Edit", "Train"]:
-        menu = self.menuBar().findChild(type("QMenu"), menu_name)
-        if menu:
+        """Disables all UI elements that depend on having an active project."""
+        self.btn_train.setEnabled(False)
+        self.btn_stop.setEnabled(False)
+
+        # Disable menu actions that require an open project
+        for menu in [self._file_menu, self._edit_menu, self._train_menu]:
             for action in menu.actions():
                 if action.text() not in ["New project", "Open", "Quit", "Exit"]:
                     action.setEnabled(False)
-    
-      # Disable save action specifically
-     file_menu = self.menuBar().findChild(type("QMenu"), "File")
-     if file_menu:
-        for action in file_menu.actions():
-            if action.text() == "Save":
-                action.setEnabled(False)
-    
-     # Clear the canvas
-     self.canvas.clear_canvas()
-     #clear the code tab as well
-     self.code_tab.clear()
-     # Reset the code tab
-     self.code_tab.set_code("")
-     self.code_tab.code_editor.setPlaceholderText(
-        "# No project loaded.\n"
-        "# Use File → New Project or File → Open to get started."
+
+        # Clear the canvas and code tab
+        self.canvas.clear_canvas()
+        self.code_tab.clear()
+        self.code_tab.set_code("")
+        self.code_tab.code_editor.setPlaceholderText(
+            "# No project loaded.\n"
+            "# Use File → New Project or File → Open to get started."
         )
-    
-     # Clear results dock
-     self.results_dock.clear()
-    
-     # Update status bar
-     self.statusBar().showMessage("No project loaded. Create or open a project to begin.")
-    
-     # Update window title
-     self.setWindowTitle("DNN Editor")
+
+        self.results_dock.clear()
+        self.statusBar().showMessage("No project loaded. Create or open a project to begin.")
+        self.setWindowTitle("DNN Editor")
 
 
 
     def _update_ui_for_project(self, project):
-       """Enables all UI elements when a project is loaded/created."""
-       # Enable toolbar buttons (Train only if ready, Stop stays disabled until training starts)
-       self._update_train_button_state()
-    
-      # Enable menu actions
-       for menu_name in ["File", "Edit", "Train"]:
-         menu = self.menuBar().findChild(type("QMenu"), menu_name)
-         if menu:
+        """Enables all UI elements when a project is loaded/created."""
+        self._update_train_button_state()
+
+        # Re-enable all menu actions
+        for menu in [self._file_menu, self._edit_menu, self._train_menu]:
             for action in menu.actions():
-                # Skip File actions that should stay enabled even without project
-                if action.text() not in ["New project", "Open", "Save", "Quit"]:
-                    action.setEnabled(True)
-    
-       # Enable save action
-       file_menu = self.menuBar().findChild(type("QMenu"), "File")
-       if file_menu:
-         for action in file_menu.actions():
-            if action.text() == "Save":
                 action.setEnabled(True)
-    
-       # Update window title
-       self.setWindowTitle(f"DNN Editor — {project.name}")
-    
-         # Update status bar
-       self.statusBar().showMessage(f"Loaded project: {project.name}", 3000)
+
+        self.setWindowTitle(f"DNN Editor — {project.name}")
+        self.statusBar().showMessage(f"Loaded project: {project.name}", 3000)
 
 
     def _update_train_button_state(self): 
@@ -551,7 +499,6 @@ class MainWindow(QMainWindow):
                 self.btn_train.setToolTip("")
         else:
             self.btn_train.setToolTip("No project loaded")
-
 
     #  enhance status message method
     def _show_status(self, message: str, duration_ms: int = 3000):

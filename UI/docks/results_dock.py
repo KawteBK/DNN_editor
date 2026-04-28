@@ -1,12 +1,15 @@
 from PyQt6.QtWidgets import (
     QDockWidget, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QSizePolicy, QTabWidget,
+    QLabel, QSizePolicy, QTabWidget, QFrame,
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QByteArray
+from PyQt6.QtGui import QPixmap, QPainter
+from PyQt6.QtSvg import QSvgRenderer
 import matplotlib
 matplotlib.use('Agg')
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
 from matplotlib.figure import Figure
+from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 
 
@@ -23,35 +26,197 @@ _CLASS_NAMES = {
                       "Dog", "Horse", "Monkey", "Ship", "Truck"],
 }
 
-_BG      = "#2b2b2b"
-_SURFACE = "#3c3f41"
-_BORDER  = "#555555"
-_TEXT    = "#cccccc"
-_DIM     = "#888888"
-_TEAL    = "#1592A2"
-_ORANGE  = "#E67E22"
-_GREEN   = "#2ECC71"
+_BG      = "#1a1d23"
+_SURFACE = "#23272f"
+_CARD    = "#2a2f3a"
+_BORDER  = "#353b47"
+_TEXT    = "#e2e8f0"
+_DIM     = "#64748b"
+_TEAL    = "#06b6d4"
+_PURPLE  = "#8b5cf6"
+_GREEN   = "#22c55e"
+_ORANGE  = "#f59e0b"
+_BLUE    = "#3b82f6"
 
 
+# ── SVG icon helpers ──────────────────────────────────────────────────────────
+
+def _svg_pixmap(svg: str, size: int = 18) -> QPixmap:
+    renderer = QSvgRenderer(QByteArray(svg.encode()))
+    pm = QPixmap(size, size)
+    pm.fill(Qt.GlobalColor.transparent)
+    p = QPainter(pm)
+    renderer.render(p)
+    p.end()
+    return pm
 
 
-def _make_stat_card(label: str, value: str = "—", value_color: str = _TEXT):
-    """Small surface card with a dim label + big bold value. Returns (widget, value_label)."""
+def _icon_target(size=22, color=_TEAL) -> QPixmap:
+    svg = f"""<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'
+               stroke='{color}' stroke-width='1.8' stroke-linecap='round'>
+      <circle cx='12' cy='12' r='9'/>
+      <circle cx='12' cy='12' r='4'/>
+      <line x1='12' y1='2' x2='12' y2='6'/>
+      <line x1='12' y1='18' x2='12' y2='22'/>
+      <line x1='2' y1='12' x2='6' y2='12'/>
+      <line x1='18' y1='12' x2='22' y2='12'/>
+    </svg>"""
+    return _svg_pixmap(svg, size)
+
+
+def _icon_recall(size=22, color=_BLUE) -> QPixmap:
+    svg = f"""<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'
+               stroke='{color}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'>
+      <path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/>
+      <polyline points='3 3 3 8 8 8'/>
+    </svg>"""
+    return _svg_pixmap(svg, size)
+
+
+def _icon_star(size=22, color=_ORANGE) -> QPixmap:
+    svg = f"""<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'
+               stroke='{color}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'>
+      <polygon points='12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02
+                       12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2'/>
+    </svg>"""
+    return _svg_pixmap(svg, size)
+
+
+def _icon_loss(size=22, color=_PURPLE) -> QPixmap:
+    svg = f"""<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'
+               stroke='{color}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'>
+      <polyline points='23 18 13.5 8.5 8.5 13.5 1 6'/>
+      <polyline points='17 18 23 18 23 12'/>
+    </svg>"""
+    return _svg_pixmap(svg, size)
+
+
+def _icon_accuracy(size=22, color=_GREEN) -> QPixmap:
+    svg = f"""<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none'
+               stroke='{color}' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'>
+      <path d='M22 11.08V12a10 10 0 1 1-5.93-9.14'/>
+      <polyline points='22 4 12 14.01 9 11.01'/>
+    </svg>"""
+    return _svg_pixmap(svg, size)
+
+
+def _pixmap_lbl(pm: QPixmap) -> QLabel:
+    l = QLabel()
+    l.setPixmap(pm)
+    l.setFixedSize(pm.width(), pm.height())
+    l.setStyleSheet("border:none; background:transparent;")
+    return l
+
+
+# ── Card builders ─────────────────────────────────────────────────────────────
+
+def _make_monitor_card(label: str, value: str = "—", value_color: str = _TEXT):
     card = QWidget()
-    card.setStyleSheet(f"background:{_SURFACE}; border-radius:6px;")
+    card.setStyleSheet(
+        f"background:{_CARD}; border-radius:8px; border:1px solid {_BORDER};"
+    )
     vl = QVBoxLayout(card)
-    vl.setContentsMargins(10, 8, 10, 8)
+    vl.setContentsMargins(12, 10, 12, 10)
     vl.setSpacing(2)
     lbl = QLabel(label)
-    lbl.setStyleSheet(f"color:{_DIM}; font-size:11px; background:transparent;")
+    lbl.setStyleSheet(f"color:{_DIM}; font-size:10px; border:none; background:transparent;")
     val = QLabel(value)
     val.setStyleSheet(
-        f"color:{value_color}; font-size:17px; font-weight:bold; background:transparent;"
+        f"color:{value_color}; font-size:16px; font-weight:bold;"
+        f" border:none; background:transparent;"
     )
     vl.addWidget(lbl)
     vl.addWidget(val)
     return card, val
 
+
+def _make_metric_card(label: str, icon_pm: QPixmap, value_color: str = _TEXT):
+    """Precision / Recall / F1 card with icon on top."""
+    card = QWidget()
+    card.setStyleSheet(
+        f"background:{_CARD}; border-radius:10px; border:1px solid {_BORDER};"
+    )
+    vl = QVBoxLayout(card)
+    vl.setContentsMargins(14, 12, 14, 12)
+    vl.setSpacing(4)
+
+    icon_row = QHBoxLayout()
+    icon_row.addWidget(_pixmap_lbl(icon_pm))
+    icon_row.addStretch()
+    vl.addLayout(icon_row)
+
+    lbl = QLabel(label)
+    lbl.setStyleSheet(
+        f"color:{_DIM}; font-size:11px; border:none; background:transparent;"
+    )
+    vl.addWidget(lbl)
+
+    val = QLabel("—")
+    val.setStyleSheet(
+        f"color:{value_color}; font-size:22px; font-weight:bold;"
+        f" border:none; background:transparent;"
+    )
+    vl.addWidget(val)
+
+    delta = QLabel("")
+    delta.setStyleSheet(
+        f"color:{_GREEN}; font-size:10px; border:none; background:transparent;"
+    )
+    vl.addWidget(delta)
+
+    return card, val, delta
+
+
+def _make_perf_card(label: str, value_color: str, spark_color: str):
+    """Test Loss / Test Accuracy card with sparkline."""
+    card = QWidget()
+    card.setStyleSheet(
+        f"background:{_CARD}; border-radius:10px; border:1px solid {_BORDER};"
+    )
+    vl = QVBoxLayout(card)
+    vl.setContentsMargins(14, 12, 14, 12)
+    vl.setSpacing(4)
+
+    lbl = QLabel(label)
+    lbl.setStyleSheet(
+        f"color:{_DIM}; font-size:11px; border:none; background:transparent;"
+    )
+
+    row = QHBoxLayout()
+    row.setSpacing(8)
+    val = QLabel("—")
+    val.setStyleSheet(
+        f"color:{value_color}; font-size:22px; font-weight:bold;"
+        f" border:none; background:transparent;"
+    )
+
+    fig = Figure(figsize=(1.4, 0.5), facecolor="none")
+    fig.patch.set_alpha(0)
+    canvas = FigureCanvasQTAgg(fig)
+    canvas.setStyleSheet("background:transparent;")
+    canvas.setFixedSize(90, 36)
+    ax = fig.add_subplot(111)
+    ax.set_facecolor("none")
+    ax.axis("off")
+    fig.tight_layout(pad=0)
+
+    row.addWidget(val)
+    row.addStretch()
+    row.addWidget(canvas)
+
+    delta = QLabel("")
+    delta.setStyleSheet(
+        f"color:{_GREEN}; font-size:10px; border:none; background:transparent;"
+    )
+
+    vl.addWidget(lbl)
+    vl.addLayout(row)
+    vl.addWidget(delta)
+
+    return card, val, delta, fig, canvas, ax
+
+
+# ── Styled figure helpers ─────────────────────────────────────────────────────
 
 def _styled_fig(figsize=(5, 2.6)):
     fig = Figure(figsize=figsize, facecolor=_BG)
@@ -72,7 +237,7 @@ _TAB_STYLE = f"""
     QTabWidget::pane {{ border:none; background:{_BG}; }}
     QTabBar::tab {{
         background:{_SURFACE}; color:{_DIM};
-        padding:5px 14px; border:none; font-size:12px;
+        padding:7px 18px; border:none; font-size:12px; font-weight:bold;
     }}
     QTabBar::tab:selected {{
         background:{_BG}; color:{_TEXT};
@@ -83,17 +248,6 @@ _TAB_STYLE = f"""
 
 
 class ResultsDock(QDockWidget):
-    """
-    Training monitoring panel — two tabs:
-
-      Monitor    — live epoch stats + loss/accuracy charts (updates each epoch)
-      Evaluation — held-out test-set scalar metrics + confusion matrix (set once after training)
-
-    The dock auto-switches tabs:
-      • Training starts  → jump to Monitor
-      • Training ends    → jump to Evaluation
-    """
-
     def __init__(self):
         super().__init__("Training Monitor")
 
@@ -110,30 +264,11 @@ class ResultsDock(QDockWidget):
         self.setWidget(outer)
 
         self._tabs = QTabWidget()
-      
         self._tabs.setStyleSheet(_TAB_STYLE)
         root.addWidget(self._tabs)
         self._tabs.setElideMode(Qt.TextElideMode.ElideNone)
         self._tabs.addTab(self._build_monitor_tab(),    "Monitor")
         self._tabs.addTab(self._build_evaluation_tab(), "Evaluation")
-
-        self._tabs.setStyleSheet("""
-    QTabBar::tab {
-        font-size: 13px;
-        font-weight: bold;
-        padding: 8px 16px;
-        min-width: 80px;
-    }
-    QTabBar::tab:selected {
-        background-color: #3c3f41;
-    }
-""")
-
-#         ("""
-# QTabBar::tab {
-#     font-weight: bold;
-# }
-# """)
 
     # ── tab builders ──────────────────────────────────────────────────────────
 
@@ -141,22 +276,20 @@ class ResultsDock(QDockWidget):
         tab = QWidget()
         tab.setStyleSheet(f"background:{_BG};")
         layout = QVBoxLayout(tab)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(10, 10, 10, 10)
         layout.setSpacing(8)
 
-        # stat cards
         row = QHBoxLayout()
         row.setSpacing(6)
-        self._card_epoch,      self._val_epoch      = _make_stat_card("Epoch",      "— / —")
-        self._card_train_loss, self._val_train_loss  = _make_stat_card("Train loss", "—")
-        self._card_val_loss,   self._val_val_loss    = _make_stat_card("Val loss",   "—")
-        self._card_val_acc,    self._val_val_acc     = _make_stat_card("Val acc",    "—", _GREEN)
+        self._card_epoch,      self._val_epoch      = _make_monitor_card("Epoch",      "— / —")
+        self._card_train_loss, self._val_train_loss  = _make_monitor_card("Train loss", "—", _PURPLE)
+        self._card_val_loss,   self._val_val_loss    = _make_monitor_card("Val loss",   "—", _ORANGE)
+        self._card_val_acc,    self._val_val_acc     = _make_monitor_card("Val acc",    "—", _GREEN)
         for c in [self._card_epoch, self._card_train_loss,
                   self._card_val_loss, self._card_val_acc]:
             row.addWidget(c)
         layout.addLayout(row)
 
-        # charts
         charts = QHBoxLayout()
         charts.setSpacing(6)
 
@@ -186,81 +319,127 @@ class ResultsDock(QDockWidget):
         return tab
 
     def _build_evaluation_tab(self) -> QWidget:
-        """
-        Layout:
-          title
-          ── 3-column row ──────────────────────────────────────────────────
-          col 0 (metrics_col): Test loss / Test accuracy / F1  — vertically stacked cards
-          col 1 (pr_col):      Precision / Recall              — vertically stacked cards
-          col 2 (cm_col):      Confusion matrix canvas         — expands to fill height
-          ──────────────────────────────────────────────────────────────────
-          hint label (hidden once data arrives)
-        """
         tab = QWidget()
         tab.setStyleSheet(f"background:{_BG};")
         outer = QVBoxLayout(tab)
-        outer.setContentsMargins(8, 10, 8, 8)
-        outer.setSpacing(6)
+        outer.setContentsMargins(10, 10, 10, 10)
+        outer.setSpacing(8)
 
-        title = QLabel("Final evaluation — held-out test set")
-        title.setStyleSheet(
-            f"color:{_DIM}; font-size:11px; font-weight:bold; letter-spacing:1px;"
-        )
-        outer.addWidget(title)
-
-        # ── 3-column body ─────────────────────────────────────────────────────
         body = QHBoxLayout()
-        body.setSpacing(8)
+        body.setSpacing(10)
 
-        # col 0 — Test loss / accuracy / F1  (vertically stacked)
-        metrics_col = QVBoxLayout()
-        metrics_col.setSpacing(6)
-        self._eval_card_loss, self._eval_val_loss = _make_stat_card("Test loss",     "—", _ORANGE)
-        self._eval_card_acc,  self._eval_val_acc  = _make_stat_card("Test accuracy", "—", _GREEN)
-        self._eval_card_f1,   self._eval_val_f1   = _make_stat_card("F1 score",      "—", _TEAL)
-        metrics_col.addWidget(self._eval_card_loss)
-        metrics_col.addWidget(self._eval_card_acc)
-        metrics_col.addWidget(self._eval_card_f1)
-        metrics_col.addStretch()
+        # ── COL 0 — Performance (Overall) ─────────────────────────────────────
+        perf_wrap = QWidget()
+        perf_wrap.setStyleSheet(
+            f"background:{_SURFACE}; border-radius:12px; border:1px solid {_BORDER};"
+        )
+        perf_vl = QVBoxLayout(perf_wrap)
+        perf_vl.setContentsMargins(12, 10, 12, 10)
+        perf_vl.setSpacing(8)
 
-        # col 1 — Precision / Recall  (vertically stacked)
-        pr_col = QVBoxLayout()
-        pr_col.setSpacing(6)
-        self._eval_card_prec, self._eval_val_prec = _make_stat_card("Precision", "—")
-        self._eval_card_rec,  self._eval_val_rec  = _make_stat_card("Recall",    "—")
-        pr_col.addWidget(self._eval_card_prec)
-        pr_col.addWidget(self._eval_card_rec)
-        pr_col.addStretch()
+        perf_title_row = QHBoxLayout()
+        perf_title_lbl = QLabel("Performance")
+        perf_title_lbl.setStyleSheet(
+            f"color:{_TEXT}; font-size:12px; font-weight:bold; border:none; background:transparent;"
+        )
+        perf_sub_lbl = QLabel("(Overall)")
+        perf_sub_lbl.setStyleSheet(
+            f"color:{_DIM}; font-size:11px; border:none; background:transparent;"
+        )
+        perf_title_row.addWidget(perf_title_lbl)
+        perf_title_row.addWidget(perf_sub_lbl)
+        perf_title_row.addStretch()
+        perf_vl.addLayout(perf_title_row)
 
-        # col 2 — Confusion matrix
-        cm_col = QVBoxLayout()
-        cm_col.setSpacing(4)
-        cm_title = QLabel("Confusion matrix (row-normalised)")
-        cm_title.setStyleSheet(f"color:{_DIM}; font-size:10px; font-weight:bold;")
-        cm_col.addWidget(cm_title)
+        (self._eval_card_loss, self._eval_val_loss, self._eval_delta_loss,
+         self._loss_spark_fig, self._loss_spark_canvas, self._loss_spark_ax) = \
+            _make_perf_card("Test Loss", _PURPLE, _PURPLE)
 
-        self.cm_fig, self.cm_canvas = _styled_fig((4.5, 3.5))
+        (self._eval_card_acc, self._eval_val_acc, self._eval_delta_acc,
+         self._acc_spark_fig, self._acc_spark_canvas, self._acc_spark_ax) = \
+            _make_perf_card("Test Accuracy", _BLUE, _BLUE)
+
+        perf_vl.addWidget(self._eval_card_loss)
+        perf_vl.addWidget(self._eval_card_acc)
+        perf_vl.addStretch()
+
+        # ── COL 1 — Classification Metrics ────────────────────────────────────
+        clf_wrap = QWidget()
+        clf_wrap.setStyleSheet(
+            f"background:{_SURFACE}; border-radius:12px; border:1px solid {_BORDER};"
+        )
+        clf_vl = QVBoxLayout(clf_wrap)
+        clf_vl.setContentsMargins(12, 10, 12, 10)
+        clf_vl.setSpacing(8)
+
+        clf_title = QLabel("Classification Metrics")
+        clf_title.setStyleSheet(
+            f"color:{_TEXT}; font-size:12px; font-weight:bold; border:none; background:transparent;"
+        )
+        clf_vl.addWidget(clf_title)
+
+        metrics_row = QHBoxLayout()
+        metrics_row.setSpacing(6)
+
+        self._eval_card_prec, self._eval_val_prec, self._eval_delta_prec = \
+            _make_metric_card("Precision", _icon_target(22, _TEAL),   _GREEN)
+        self._eval_card_rec,  self._eval_val_rec,  self._eval_delta_rec = \
+            _make_metric_card("Recall",    _icon_recall(22, _BLUE),   _BLUE)
+        self._eval_card_f1,   self._eval_val_f1,   self._eval_delta_f1 = \
+            _make_metric_card("F1 Score",  _icon_star(22,   _ORANGE), _ORANGE)
+
+        for c in [self._eval_card_prec, self._eval_card_rec, self._eval_card_f1]:
+            c.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+            metrics_row.addWidget(c)
+
+        clf_vl.addLayout(metrics_row)
+        clf_vl.addStretch()
+
+        # ── COL 2 — Confusion Matrix ───────────────────────────────────────────
+        cm_wrap = QWidget()
+        cm_wrap.setStyleSheet(
+            f"background:{_SURFACE}; border-radius:12px; border:1px solid {_BORDER};"
+        )
+        cm_vl = QVBoxLayout(cm_wrap)
+        cm_vl.setContentsMargins(12, 10, 12, 10)
+        cm_vl.setSpacing(6)
+
+        cm_title_row = QHBoxLayout()
+        cm_title_lbl = QLabel("Confusion Matrix")
+        cm_title_lbl.setStyleSheet(
+            f"color:{_TEXT}; font-size:12px; font-weight:bold; border:none; background:transparent;"
+        )
+        cm_sub_lbl = QLabel("(Test Set)")
+        cm_sub_lbl.setStyleSheet(
+            f"color:{_DIM}; font-size:11px; border:none; background:transparent;"
+        )
+        cm_title_row.addWidget(cm_title_lbl)
+        cm_title_row.addWidget(cm_sub_lbl)
+        cm_title_row.addStretch()
+        cm_vl.addLayout(cm_title_row)
+
+        self.cm_fig, self.cm_canvas = _styled_fig((4.5, 3.2))
+        self.cm_fig.patch.set_facecolor("none")
+        self.cm_canvas.setStyleSheet(f"background:{_SURFACE};")
         self.cm_canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self.cm_canvas.setMinimumHeight(160)
-        cm_col.addWidget(self.cm_canvas)
+        cm_vl.addWidget(self.cm_canvas)
 
         self._cm_hint = QLabel("Confusion matrix appears here after training.")
         self._cm_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self._cm_hint.setWordWrap(True)
         self._cm_hint.setStyleSheet(
-            f"color:{_DIM}; font-size:11px; padding:12px;"
-            f"background:{_SURFACE}; border-radius:6px;"
+            f"color:{_DIM}; font-size:11px; padding:16px;"
+            f"background:{_CARD}; border-radius:8px; border:none;"
         )
-        cm_col.addWidget(self._cm_hint)
+        cm_vl.addWidget(self._cm_hint)
 
-        # assemble columns — give the CM column more stretch
-        body.addLayout(metrics_col, 1)
-        body.addLayout(pr_col, 1)
-        body.addLayout(cm_col, 3)
+        body.addWidget(perf_wrap, 3)
+        body.addWidget(clf_wrap,  4)
+        body.addWidget(cm_wrap,   5)
         outer.addLayout(body, 1)
 
-        # hint shown before first training run
         self._eval_hint = QLabel(
             "Train the model to see test-set evaluation.\n"
             "These metrics are computed once on data the model never saw during training."
@@ -269,7 +448,7 @@ class ResultsDock(QDockWidget):
         self._eval_hint.setWordWrap(True)
         self._eval_hint.setStyleSheet(
             f"color:{_DIM}; font-size:11px; padding:16px;"
-            f"background:{_SURFACE}; border-radius:6px;"
+            f"background:{_CARD}; border-radius:8px;"
         )
         outer.addWidget(self._eval_hint)
         return tab
@@ -293,7 +472,6 @@ class ResultsDock(QDockWidget):
         if val_acc is not None:
             self._val_accs.append(val_acc)
 
-        # stat cards
         self._val_epoch.setText(f"{epoch} / {total}")
         self._val_train_loss.setText(f"{train_loss:.4f}")
         if val_loss is not None:
@@ -301,10 +479,9 @@ class ResultsDock(QDockWidget):
         if val_acc is not None:
             self._val_val_acc.setText(f"{val_acc:.1f}%")
 
-        # loss chart
         self.loss_ax.clear()
         _style_ax(self.loss_ax, "Loss")
-        self.loss_ax.plot(self._train_losses, label="train", color=_TEAL, linewidth=1.5)
+        self.loss_ax.plot(self._train_losses, label="train", color=_PURPLE, linewidth=1.5)
         if self._val_losses:
             self.loss_ax.plot(self._val_losses, label="val", color=_ORANGE, linewidth=1.5)
         self.loss_ax.legend(
@@ -312,7 +489,6 @@ class ResultsDock(QDockWidget):
         self.loss_fig.tight_layout(pad=0.8)
         self.loss_canvas.draw()
 
-        # accuracy chart
         self.acc_ax.clear()
         _style_ax(self.acc_ax, "Accuracy (%)")
         if self._val_accs:
@@ -331,24 +507,40 @@ class ResultsDock(QDockWidget):
 
         if test_loss is not None:
             self._eval_hint.setVisible(False)
-            self._eval_val_loss.setText(f"{test_loss:.4f}")
+            self._eval_val_loss.setText(f"{test_loss:.3f}")
+            self._eval_delta_loss.setText("↓ improving" if test_loss < 0.5 else "")
+            self._update_sparkline(self._loss_spark_ax, self._loss_spark_fig,
+                                   self._loss_spark_canvas, self._val_losses, _PURPLE)
+
         if test_acc is not None:
             self._eval_val_acc.setText(f"{test_acc:.1f}%")
+            self._eval_delta_acc.setText(f"↑ {test_acc:.1f}%")
+            self._eval_delta_acc.setStyleSheet(
+                f"color:{_GREEN}; font-size:10px; border:none; background:transparent;"
+            )
+            self._update_sparkline(self._acc_spark_ax, self._acc_spark_fig,
+                                   self._acc_spark_canvas, self._val_accs, _BLUE)
+
         if test_f1 is not None:
             self._eval_val_f1.setText(f"{test_f1:.3f}")
+            self._eval_delta_f1.setText(f"↑ {test_f1*100:.1f}%")
         else:
-            self._eval_val_f1.setText("— n/a")
+            self._eval_val_f1.setText("n/a")
+
         if test_prec is not None:
             self._eval_val_prec.setText(f"{test_prec:.3f}")
+            self._eval_delta_prec.setText(f"↑ {test_prec*100:.1f}%")
+
         if test_rec is not None:
             self._eval_val_rec.setText(f"{test_rec:.3f}")
+            self._eval_delta_rec.setText(f"↑ {test_rec*100:.1f}%")
 
         cm = history.get("confusion_matrix")
         if cm:
             self._draw_confusion_matrix(cm)
 
         if test_loss is not None:
-            self._tabs.setCurrentIndex(1)   # jump to Evaluation tab
+            self._tabs.setCurrentIndex(1)
 
     def clear(self) -> None:
         self._train_losses.clear()
@@ -370,20 +562,39 @@ class ResultsDock(QDockWidget):
         self._val_val_acc.setText("—")
         self._monitor_hint.setVisible(True)
 
-        self._eval_val_loss.setText("—")
-        self._eval_val_acc.setText("—")
-        self._eval_val_f1.setText("—")
-        self._eval_val_prec.setText("—")
-        self._eval_val_rec.setText("—")
+        for attr in ["_eval_val_loss", "_eval_val_acc", "_eval_val_f1",
+                     "_eval_val_prec", "_eval_val_rec"]:
+            getattr(self, attr).setText("—")
+        for attr in ["_eval_delta_loss", "_eval_delta_acc", "_eval_delta_f1",
+                     "_eval_delta_prec", "_eval_delta_rec"]:
+            getattr(self, attr).setText("")
         self._eval_hint.setVisible(True)
 
         self.cm_fig.clear()
         self.cm_canvas.draw()
         self._cm_hint.setVisible(True)
 
+        for ax, fig, canvas in [
+            (self._loss_spark_ax, self._loss_spark_fig, self._loss_spark_canvas),
+            (self._acc_spark_ax,  self._acc_spark_fig,  self._acc_spark_canvas),
+        ]:
+            ax.clear()
+            ax.axis("off")
+            fig.tight_layout(pad=0)
+            canvas.draw()
+
         self._tabs.setCurrentIndex(0)
 
     # ── private ───────────────────────────────────────────────────────────────
+
+    def _update_sparkline(self, ax, fig, canvas, data: list, color: str) -> None:
+        ax.clear()
+        ax.set_facecolor("none")
+        ax.axis("off")
+        if data:
+            ax.plot(data[-20:], color=color, linewidth=1.5)
+        fig.tight_layout(pad=0)
+        canvas.draw()
 
     def _draw_confusion_matrix(self, cm: list) -> None:
         self._cm_hint.setVisible(False)
@@ -392,44 +603,46 @@ class ResultsDock(QDockWidget):
         row_sums[row_sums == 0] = 1
         cm_norm = cm_array / row_sums
 
-        n_classes   = cm_array.shape[0]
-        names       = _CLASS_NAMES.get(self._dataset_key, [str(i) for i in range(n_classes)])
-        names       = (names + [str(i) for i in range(n_classes)])[:n_classes]
+        n_classes = cm_array.shape[0]
+        names     = _CLASS_NAMES.get(self._dataset_key, [str(i) for i in range(n_classes)])
+        names     = (names + [str(i) for i in range(n_classes)])[:n_classes]
 
         self.cm_fig.clear()
-        self.cm_fig.patch.set_facecolor(_BG)
+        self.cm_fig.patch.set_facecolor("none")
         ax = self.cm_fig.add_subplot(111)
-        ax.set_facecolor(_BG)
+        ax.set_facecolor(_SURFACE)
 
-        im = ax.imshow(cm_norm, interpolation="nearest", cmap="Blues", vmin=0, vmax=1)
-        cb = self.cm_fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-        cb.ax.tick_params(colors=_DIM, labelsize=7)
+        purple_cmap = LinearSegmentedColormap.from_list(
+            "purple_dark", [_SURFACE, "#7c3aed"], N=256
+        )
+        ax.imshow(cm_norm, interpolation="nearest", cmap=purple_cmap, vmin=0, vmax=1)
 
         if n_classes <= 20:
             ax.set_xticks(range(n_classes))
             ax.set_yticks(range(n_classes))
-            ax.set_xticklabels(names, rotation=45, ha="right", fontsize=7, color=_TEXT)
-            ax.set_yticklabels(names, fontsize=7, color=_TEXT)
+            short = [f"Class {i}" if len(names[i]) > 8 else names[i]
+                     for i in range(n_classes)]
+            ax.set_xticklabels(short, rotation=45, ha="right", fontsize=7, color=_TEXT)
+            ax.set_yticklabels(short, fontsize=7, color=_TEXT)
         else:
             ax.set_xticks([])
             ax.set_yticks([])
 
-        ax.set_xlabel("Predicted", fontsize=8, color=_DIM)
-        ax.set_ylabel("True",      fontsize=8, color=_DIM)
-        ax.set_title("Row-normalised  (diagonal = correct)", fontsize=8, color=_TEXT, pad=6)
+        ax.set_xlabel("Predicted", fontsize=8, color=_DIM, labelpad=4)
+        ax.set_ylabel("Actual",    fontsize=8, color=_DIM, labelpad=4)
         ax.tick_params(colors=_DIM)
         for spine in ax.spines.values():
             spine.set_edgecolor(_BORDER)
 
         if n_classes <= 15:
-            thresh = cm_norm.max() / 2.0
             for i in range(n_classes):
                 for j in range(n_classes):
                     ax.text(
                         j, i, int(cm_array[i, j]),
-                        ha="center", va="center", fontsize=6,
-                        color="white" if cm_norm[i, j] > thresh else "black",
+                        ha="center", va="center", fontsize=7,
+                        color="white" if cm_norm[i, j] > 0.5 else _DIM,
+                        fontweight="bold" if i == j else "normal",
                     )
 
-        self.cm_fig.tight_layout(pad=0.8)
+        self.cm_fig.tight_layout(pad=0.6)
         self.cm_canvas.draw()
