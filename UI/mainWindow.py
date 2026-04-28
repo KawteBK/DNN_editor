@@ -111,6 +111,8 @@ class MainWindow(QMainWindow):
         self.canvas   = NetworkTab(self.network_vm)
         self.code_tab = CodeTab()
         self.inference_tab = OngletInference()
+        self.inference_tab.set_project_vm(self.project_vm)
+
         tabs.addTab(self.canvas, "Network")
         tabs.addTab(self.code_tab, "Code")
         tabs.addTab(self.inference_tab, "Inference")
