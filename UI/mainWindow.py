@@ -389,6 +389,16 @@ class MainWindow(QMainWindow):
         self.project_vm._project = project
         self.project_vm.save()
         elapsed = self.training_vm.elapsed_seconds()
+
+        #here we populate the result dock:
+
+ 
+        #first the dataset for the confusion matrix
+        if project.dataset and project.dataset._builtinType:
+            self.results_dock.set_dataset_key(project.dataset._builtinType.name)
+        #training logs for the the rest of scores, precicion ect
+        if project.trainingLogs:
+            self.results_dock.on_training_finished(project.trainingLogs)
     
         # Play sound
         self.sound.play()
