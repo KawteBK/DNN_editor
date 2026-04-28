@@ -1,5 +1,5 @@
 from Core.project import Project
-import network
+
 
 
 
@@ -180,7 +180,7 @@ class RecurrentWrapper(nn.Module):
         output, _ = self.rnn(x)
         return output if self.return_seq else output[:, -1, :]'''
 
-    @staticmethod
+  
     @staticmethod
     def _gen_model(data: dict) -> str:
         """

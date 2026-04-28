@@ -373,14 +373,6 @@ class MainWindow(QMainWindow):
         self._update_train_button_state()
     #finished the reenabling :P
 
-    def _on_training_finished(self, project):
-        # Write the updated project (logs + weightsPath) back and save
-        self.project_vm._project = project
-        self.project_vm.save()
-        elapsed = self.training_vm.elapsed_seconds()
-        self.statusBar().showMessage(
-            f"Training complete — {elapsed:.0f}s", 5000
-        )
 
     def _update_training_time(self):
         elapsed = self.training_vm.elapsed_seconds()
@@ -545,17 +537,6 @@ class MainWindow(QMainWindow):
                 self.btn_train.setToolTip("")
         else:
             self.btn_train.setToolTip("No project loaded")
-
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = MainWindow()
-    window.show()
-    sys.exit(app.exec())
-
-
-
 
 
     #  enhance status message method
