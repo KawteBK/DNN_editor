@@ -1,9 +1,10 @@
 from PyQt6.QtWidgets import (
-    QDockWidget, QScrollArea, QVBoxLayout, QWidget, QFormLayout, QLabel,
+    QDockWidget, QScrollArea, QTabBar, QVBoxLayout, QWidget, QFormLayout, QLabel,
     QLineEdit, QComboBox, QCheckBox
 )
 
 from Core.networkConfig import OptimizerType, LossType, MetricType
+from PyQt6.QtCore import Qt
 
 
 # Maps UI display strings ↔ Core enums
@@ -66,6 +67,8 @@ class NetworkConfigDock(QDockWidget):
         scroll.setWidgetResizable(True)
         scroll.setWidget(widget)
         self.setWidget(scroll)
+        layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+
 
         # ADDED: connect every field so project_vm stays in sync as the user types
         self.epochs.editingFinished.connect(self._push)

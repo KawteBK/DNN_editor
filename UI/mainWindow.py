@@ -1,10 +1,8 @@
 import sys
-
+from PyQt6.QtMultimedia import QSoundEffect
+from PyQt6.QtCore import QUrl
 import os
-try:
-    import winsound # Windows only
-except:
-    pass
+
 
 #this to fix all the bullshit about module notfound when importing from another folder that  is not on the same level as the file that imports it
 sys.path.insert(0, os.path.dirname(__file__))                      # -> UI/
@@ -62,7 +60,11 @@ class MainWindow(QMainWindow):
         menubar.addMenu("Settings")
 
 
-        
+        #setting up sounds———————————
+
+        self.sound = QSoundEffect()
+        self.sound.setSource(QUrl.fromLocalFile("beep.wav"))  # you need a sound file
+        self.sound.setVolume(0.5)
         # ── toolbar ───────────────────────────────────────────────────────────
         toolbar = QToolBar()
         self.addToolBar(toolbar)
@@ -144,12 +146,12 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.results_dock)
 
         # setting dock sizes:
-        self.palette_dock.setMinimumWidth(190)
+        self.palette_dock.setMinimumWidth(200)
         # # self.palette_dock.setMaximumWidth(220)
         self.config_dock.setMinimumHeight(230)  # Make taller
-        # self.config_dock.setMinimumWidth(250)
+        self.config_dock.setMinimumWidth(190)
         # self.dataset_dock.setMinimumWidth(220)
-        # self.network_config_dock.setMinimumWidth(250)
+        self.network_config_dock.setMinimumWidth(200)
 
         self.results_dock.setMaximumHeight(300)
 
@@ -389,16 +391,7 @@ class MainWindow(QMainWindow):
         elapsed = self.training_vm.elapsed_seconds()
     
         # Play sound
-        try:
-            # Windows
-            winsound.MessageBeep(winsound.MB_ICONINFORMATION)
-            # OR winsound.Beep(1000, 500)  # frequency, duration
-        except:
-            try:
-                # Linux/Mac - simple console beep
-                print('\a')
-            except:
-                pass
+        self.sound.play()
     
         # Show notification
         from PyQt6.QtWidgets import QSystemTrayIcon, QMenu

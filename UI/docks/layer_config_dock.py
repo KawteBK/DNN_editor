@@ -27,7 +27,6 @@ class LayerConfigDock(QDockWidget):
             
 
 
-
         self._form_widget = QWidget()
         self._layout = QFormLayout()
         self._form_widget.setLayout(self._layout)
@@ -35,6 +34,9 @@ class LayerConfigDock(QDockWidget):
         scroll.setWidget(self._form_widget)
         scroll.setWidgetResizable(True)
         self.setWidget(scroll)
+
+        self._layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
+
         
 
        

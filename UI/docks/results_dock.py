@@ -441,7 +441,7 @@ class ResultsDock(QDockWidget):
         outer.addLayout(body, 1)
 
         self._eval_hint = QLabel(
-            "Train the model to see test-set evaluation.\n"
+            "Train the model to see test-set evaluation. "
             "These metrics are computed once on data the model never saw during training."
         )
         self._eval_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
