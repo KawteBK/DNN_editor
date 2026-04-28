@@ -306,6 +306,8 @@ class MainWindow(QMainWindow):
         self.dataset_dock.load_from_project(project)
         self.network_config_dock.load_from_project(project)
         self.results_dock.clear()
+        self.code_tab.clear()
+
         if project.dataset and project.networkConfig:
           self._refresh_code_tab()
         self._update_train_button_state()
@@ -457,7 +459,6 @@ class MainWindow(QMainWindow):
         # Clear the canvas and code tab
         self.canvas.clear_canvas()
         self.code_tab.clear()
-        self.code_tab.set_code("")
         self.code_tab.code_editor.setPlaceholderText(
             "# No project loaded.\n"
             "# Use File → New Project or File → Open to get started."
