@@ -84,11 +84,10 @@ _TAB_STYLE = f"""
 
 class ResultsDock(QDockWidget):
     """
-    Training monitoring panel — three tabs:
+    Training monitoring panel — two tabs:
 
       Monitor    — live epoch stats + loss/accuracy charts (updates each epoch)
-      Evaluation — held-out test-set scalar metrics (set once after training)
-      Confusion  — row-normalised confusion matrix heatmap (set once after training)
+      Evaluation — held-out test-set scalar metrics + confusion matrix (set once after training)
 
     The dock auto-switches tabs:
       • Training starts  → jump to Monitor
@@ -117,7 +116,6 @@ class ResultsDock(QDockWidget):
         self._tabs.setElideMode(Qt.TextElideMode.ElideNone)
         self._tabs.addTab(self._build_monitor_tab(),    "Monitor")
         self._tabs.addTab(self._build_evaluation_tab(), "Evaluation")
-        self._tabs.addTab(self._build_confusion_tab(),  "Confusion")
 
         self._tabs.setStyleSheet("""
     QTabBar::tab {
@@ -188,37 +186,81 @@ class ResultsDock(QDockWidget):
         return tab
 
     def _build_evaluation_tab(self) -> QWidget:
+        """
+        Layout:
+          title
+          ── 3-column row ──────────────────────────────────────────────────
+          col 0 (metrics_col): Test loss / Test accuracy / F1  — vertically stacked cards
+          col 1 (pr_col):      Precision / Recall              — vertically stacked cards
+          col 2 (cm_col):      Confusion matrix canvas         — expands to fill height
+          ──────────────────────────────────────────────────────────────────
+          hint label (hidden once data arrives)
+        """
         tab = QWidget()
         tab.setStyleSheet(f"background:{_BG};")
-        layout = QVBoxLayout(tab)
-        layout.setContentsMargins(8, 12, 8, 8)
-        layout.setSpacing(8)
+        outer = QVBoxLayout(tab)
+        outer.setContentsMargins(8, 10, 8, 8)
+        outer.setSpacing(6)
 
         title = QLabel("Final evaluation — held-out test set")
         title.setStyleSheet(
             f"color:{_DIM}; font-size:11px; font-weight:bold; letter-spacing:1px;"
         )
-        layout.addWidget(title)
+        outer.addWidget(title)
 
-        row1 = QHBoxLayout()
-        row1.setSpacing(6)
+        # ── 3-column body ─────────────────────────────────────────────────────
+        body = QHBoxLayout()
+        body.setSpacing(8)
+
+        # col 0 — Test loss / accuracy / F1  (vertically stacked)
+        metrics_col = QVBoxLayout()
+        metrics_col.setSpacing(6)
         self._eval_card_loss, self._eval_val_loss = _make_stat_card("Test loss",     "—", _ORANGE)
         self._eval_card_acc,  self._eval_val_acc  = _make_stat_card("Test accuracy", "—", _GREEN)
         self._eval_card_f1,   self._eval_val_f1   = _make_stat_card("F1 score",      "—", _TEAL)
-        row1.addWidget(self._eval_card_loss)
-        row1.addWidget(self._eval_card_acc)
-        row1.addWidget(self._eval_card_f1)
-        layout.addLayout(row1)
+        metrics_col.addWidget(self._eval_card_loss)
+        metrics_col.addWidget(self._eval_card_acc)
+        metrics_col.addWidget(self._eval_card_f1)
+        metrics_col.addStretch()
 
-        row2 = QHBoxLayout()
-        row2.setSpacing(6)
+        # col 1 — Precision / Recall  (vertically stacked)
+        pr_col = QVBoxLayout()
+        pr_col.setSpacing(6)
         self._eval_card_prec, self._eval_val_prec = _make_stat_card("Precision", "—")
         self._eval_card_rec,  self._eval_val_rec  = _make_stat_card("Recall",    "—")
-        row2.addWidget(self._eval_card_prec)
-        row2.addWidget(self._eval_card_rec)
-        row2.addStretch()
-        layout.addLayout(row2)
+        pr_col.addWidget(self._eval_card_prec)
+        pr_col.addWidget(self._eval_card_rec)
+        pr_col.addStretch()
 
+        # col 2 — Confusion matrix
+        cm_col = QVBoxLayout()
+        cm_col.setSpacing(4)
+        cm_title = QLabel("Confusion matrix (row-normalised)")
+        cm_title.setStyleSheet(f"color:{_DIM}; font-size:10px; font-weight:bold;")
+        cm_col.addWidget(cm_title)
+
+        self.cm_fig, self.cm_canvas = _styled_fig((4.5, 3.5))
+        self.cm_canvas.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        self.cm_canvas.setMinimumHeight(160)
+        cm_col.addWidget(self.cm_canvas)
+
+        self._cm_hint = QLabel("Confusion matrix appears here after training.")
+        self._cm_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._cm_hint.setWordWrap(True)
+        self._cm_hint.setStyleSheet(
+            f"color:{_DIM}; font-size:11px; padding:12px;"
+            f"background:{_SURFACE}; border-radius:6px;"
+        )
+        cm_col.addWidget(self._cm_hint)
+
+        # assemble columns — give the CM column more stretch
+        body.addLayout(metrics_col, 1)
+        body.addLayout(pr_col, 1)
+        body.addLayout(cm_col, 3)
+        outer.addLayout(body, 1)
+
+        # hint shown before first training run
         self._eval_hint = QLabel(
             "Train the model to see test-set evaluation.\n"
             "These metrics are computed once on data the model never saw during training."
@@ -229,37 +271,7 @@ class ResultsDock(QDockWidget):
             f"color:{_DIM}; font-size:11px; padding:16px;"
             f"background:{_SURFACE}; border-radius:6px;"
         )
-        layout.addWidget(self._eval_hint)
-        layout.addStretch()
-        return tab
-
-    def _build_confusion_tab(self) -> QWidget:
-        tab = QWidget()
-        tab.setStyleSheet(f"background:{_BG};")
-        layout = QVBoxLayout(tab)
-        layout.setContentsMargins(8, 8, 8, 8)
-        layout.setSpacing(6)
-
-        title = QLabel("Confusion matrix — test set (row-normalised)")
-        title.setStyleSheet(
-            f"color:{_DIM}; font-size:11px; font-weight:bold; letter-spacing:1px;"
-        )
-        layout.addWidget(title)
-
-        self.cm_fig, self.cm_canvas = _styled_fig((5, 4.5))
-        self.cm_canvas.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
-        self.cm_canvas.setMinimumHeight(180)
-        layout.addWidget(self.cm_canvas)
-
-        self._cm_hint = QLabel("Confusion matrix appears here after training.")
-        self._cm_hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self._cm_hint.setStyleSheet(
-            f"color:{_DIM}; font-size:12px; padding:16px;"
-            f"background:{_SURFACE}; border-radius:6px;"
-        )
-        layout.addWidget(self._cm_hint)
-        layout.addStretch()
+        outer.addWidget(self._eval_hint)
         return tab
 
     # ── public API ────────────────────────────────────────────────────────────
