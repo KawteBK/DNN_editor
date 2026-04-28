@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QDockWidget, QWidget, QVBoxLayout, QPushButton, QLabel
+from PyQt6.QtWidgets import QDockWidget, QScrollArea, QWidget, QVBoxLayout, QPushButton, QLabel
 
 
 class LayerPaletteDock(QDockWidget):
@@ -31,3 +31,8 @@ class LayerPaletteDock(QDockWidget):
         layout.addStretch()
         widget.setLayout(layout)
         self.setWidget(widget)
+
+        scroll = QScrollArea()
+        scroll.setWidget(widget)
+        scroll.setWidgetResizable(True)
+        self.setWidget(scroll)

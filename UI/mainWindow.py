@@ -144,9 +144,9 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.BottomDockWidgetArea, self.results_dock)
 
         # setting dock sizes:
-        # self.palette_dock.setMinimumWidth(180)
+        self.palette_dock.setMinimumWidth(190)
         # # self.palette_dock.setMaximumWidth(220)
-        # self.config_dock.setMinimumHeight(300)  # Make taller
+        self.config_dock.setMinimumHeight(230)  # Make taller
         # self.config_dock.setMinimumWidth(250)
         # self.dataset_dock.setMinimumWidth(220)
         # self.network_config_dock.setMinimumWidth(250)

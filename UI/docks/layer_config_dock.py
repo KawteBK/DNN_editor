@@ -31,9 +31,13 @@ class LayerConfigDock(QDockWidget):
         self._form_widget = QWidget()
         self._layout = QFormLayout()
         self._form_widget.setLayout(self._layout)
+        scroll = QScrollArea()
         scroll.setWidget(self._form_widget)
         scroll.setWidgetResizable(True)
         self.setWidget(scroll)
+        
+
+       
 
         # ADDED: connect to NetworkVM so the form rebuilds when a node is clicked
         self.network_vm.layer_selected.connect(self._on_layer_selected)
