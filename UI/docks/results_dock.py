@@ -26,12 +26,12 @@ _CLASS_NAMES = {
                       "Dog", "Horse", "Monkey", "Ship", "Truck"],
 }
 
-_BG      = "#1a1d23"
-_SURFACE = "#23272f"
-_CARD    = "#2a2f3a"
-_BORDER  = "#353b47"
-_TEXT    = "#e2e8f0"
-_DIM     = "#64748b"
+_BG      = "#2b2b2b"
+_SURFACE = "#3c3f41"
+_CARD    = "#313438"
+_BORDER  = "#555555"
+_TEXT    = "#cccccc"
+_DIM     = "#888888"
 _TEAL    = "#06b6d4"
 _PURPLE  = "#8b5cf6"
 _GREEN   = "#22c55e"

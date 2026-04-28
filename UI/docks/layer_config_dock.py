@@ -295,13 +295,6 @@ class LayerConfigDock(QDockWidget):
 
     # ── push changes to NetworkVM ─────────────────────────────────────────────
 
-    def _push(self, params: dict) -> None:
-        # ADDED: sends field changes to NetworkVM, which updates the Core layer
-        # and re-propagates shapes. The canvas then refreshes its shape labels
-        # via the network_changed signal.
-        if self._current_layer_id is None:
-            return
-        self.network_vm.update_layer_params(self._current_layer_id, params)
 
     # ── form lifecycle ────────────────────────────────────────────────────────
 
@@ -372,3 +365,6 @@ class LayerConfigDock(QDockWidget):
             self._flash_field(sender)
     
         self.network_vm.update_layer_params(self._current_layer_id, params)
+
+
+    
