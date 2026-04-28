@@ -191,6 +191,8 @@ class MainWindow(QMainWindow):
 
         # Network changes → regenerate code tab
         self.network_vm.network_changed.connect(self._refresh_code_tab)
+        # Fix 9 — re-evaluate Train button whenever the graph changes
+        self.network_vm.network_changed.connect(self._update_train_button_state)
         tabs.currentChanged.connect(self._on_tab_changed)
         self.setCentralWidget(tabs)
 
@@ -303,6 +305,14 @@ class MainWindow(QMainWindow):
         self.dataset_dock.load_from_project(project)
         self.network_config_dock.load_from_project(project)
         self.results_dock.clear()
+        # Fix 8 — keep confusion-matrix class labels in sync with the dataset
+        if project.dataset is not None:
+            self.results_dock.set_dataset_key(
+                project.dataset._builtinType.value.upper()
+                if project.dataset._builtinType is not None else None
+            )
+        else:
+            self.results_dock.set_dataset_key(None)
         if project.dataset and project.networkConfig:
           self._refresh_code_tab()
         self._update_train_button_state()
@@ -391,6 +401,8 @@ class MainWindow(QMainWindow):
         self.project_vm._project = project
         self.project_vm.save()
         elapsed = self.training_vm.elapsed_seconds()
+        self.results_dock.on_training_finished(project.trainingLogs)
+
     
         # Play sound
         try:

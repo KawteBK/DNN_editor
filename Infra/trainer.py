@@ -101,6 +101,64 @@ class PyTorchTrainer:
         if best_weights is not None:
             model.load_state_dict(best_weights)
 
+        # ── final test-set evaluation ─────────────────────────────────────────
+        # We re-load the full dataset without a validation split so that the
+        # test pass sees ALL samples (train + previously held-out val).
+        # For a proper train/val/test split we use a fixed 10 % held-out slice
+        # drawn from the same full dataset but with a deterministic seed so it
+        # is reproducible across runs.
+        try:
+            from .pytorchDataset import PyTorchDatasets, _DEFAULT_DATA_ROOT as _DATA_ROOT
+            from torch.utils.data import DataLoader, random_split
+            import torch as _torch
+
+            # Load the full dataset (no split)
+            _transform = PyTorchDatasets._get_transforms(project.dataset._builtinType)
+            _full = PyTorchDatasets._load_builtin(
+                project.dataset._builtinType, _transform, _DATA_ROOT,
+            )
+            _test_size = max(1, int(len(_full) * 0.10))
+            _rest_size = len(_full) - _test_size
+            # Fixed seed → same split every run so numbers are comparable
+            _gen = _torch.Generator().manual_seed(42)
+            _, _test_set = random_split(_full, [_rest_size, _test_size], generator=_gen)
+            _test_loader = DataLoader(
+                _test_set,
+                batch_size=tc._batchSize,
+                shuffle=False,
+                num_workers=2,
+                pin_memory=True,
+            )
+            # Always collect all metrics for the test set (F1/precision/recall
+            # require the full prediction list so we pass every MetricType).
+            from Core.networkConfig import MetricType as _MT
+            _all_metrics = list(_MT)
+            _test_metrics = PyTorchTrainer._evaluate(
+                model, _test_loader, criterion, device, _all_metrics
+            )
+            history["test_loss"]      = round(_test_metrics.get("loss",      0.0), 6)
+            history["test_accuracy"]  = round(_test_metrics.get("accuracy",  0.0), 4)
+            history["test_f1_score"]  = round(_test_metrics.get("f1_score",  0.0), 4)
+            history["test_precision"] = round(_test_metrics.get("precision", 0.0), 4)
+            history["test_recall"]    = round(_test_metrics.get("recall",    0.0), 4)
+
+            # ── confusion matrix ──────────────────────────────────────────────
+            from sklearn.metrics import confusion_matrix as _cm_fn
+            import numpy as _np
+            model.eval()
+            _preds, _labels = [], []
+            with _torch.no_grad():
+                for _x, _y in _test_loader:
+                    _x, _y = _x.to(device), _y.to(device)
+                    _, _predicted = model(_x).max(1)
+                    _preds.extend(_predicted.cpu().numpy())
+                    _labels.extend(_y.cpu().numpy())
+            history["confusion_matrix"] = _cm_fn(_labels, _preds).tolist()
+
+        except Exception as _e:
+            # Test evaluation is best-effort — never crash the whole training run
+            print(f"[Trainer] Test-set evaluation skipped: {_e}")
+
         # ── save weights to disk ──────────────────────────────────────────────
         weights_path = os.path.join(project.path, Project.WEIGHTS_FILENAME)
         torch.save(model.state_dict(), weights_path)
