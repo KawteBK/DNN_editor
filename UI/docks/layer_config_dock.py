@@ -359,16 +359,16 @@ class LayerConfigDock(QDockWidget):
     def _flash_field(self, field: QWidget):
         """Temporarily highlight a field to show value was applied."""
         original_bg = field.styleSheet()
-        field.setStyleSheet("background-color: #2ECC71; border: 1px solid #27AE60;")
+        field.setStyleSheet("background-color: #279AAE; border: 1px solid #B3F4FF;")
         QTimer.singleShot(200, lambda: field.setStyleSheet(original_bg))
 
-def _push(self, params: dict) -> None:
-    if self._current_layer_id is None:
-        return
+    def _push(self, params: dict) -> None:
+        if self._current_layer_id is None:
+            return
     
-    # Find which widget was changed and flash it
-    sender = self.sender()
-    if sender and isinstance(sender, QLineEdit):
-        self._flash_field(sender)
+        #Find which widget was changed and flash it
+        sender = self.sender()
+        if sender and isinstance(sender, QLineEdit):
+            self._flash_field(sender)
     
-    self.network_vm.update_layer_params(self._current_layer_id, params)
+        self.network_vm.update_layer_params(self._current_layer_id, params)
