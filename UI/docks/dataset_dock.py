@@ -1,7 +1,9 @@
 from PyQt6.QtWidgets import (
-    QDockWidget, QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton
+    QDockWidget, QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton,
+    QDialog, QGridLayout, QScrollArea, QSizePolicy
 )
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QPixmap, QImage
 from Core.dataset import BuiltinDataset
 
 
@@ -56,6 +58,9 @@ class DatasetDock(QDockWidget):
         # was picked so project.dataset gets set properly
         self.dataset_combo.currentTextChanged.connect(self._on_selection_changed)
 
+        # ADDED: wire up the preview button
+        self.preview_btn.clicked.connect(self._on_preview_clicked)
+
         # Populate labels for the default selection
         self._update_labels(self.dataset_combo.currentText())
 
@@ -82,6 +87,152 @@ class DatasetDock(QDockWidget):
         self.info_input.setText(f"Input shape: {shape}")
         self.info_train.setText(f"Train samples: {train}")
         self.info_test.setText(f"Test samples: {test}")
+
+    # ── dataset preview ───────────────────────────────────────────────────────
+
+    def _on_preview_clicked(self) -> None:
+        """
+        Opens a dialog showing a 4×4 grid of sample images from the selected
+        dataset. Uses torchvision to download/load the data on demand — the
+        same library the trainer already depends on — so no extra deps needed.
+        """
+        display_name = self.dataset_combo.currentText()
+        info = _DISPLAY_INFO.get(display_name)
+        if info is None:
+            return
+
+        builtin_type = info[5]
+
+        # Show a loading cursor while we fetch samples
+        from PyQt6.QtWidgets import QApplication
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            samples = self._load_preview_samples(builtin_type, n=16)
+        except Exception as exc:
+            QApplication.restoreOverrideCursor()
+            from PyQt6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Preview failed",
+                                f"Could not load dataset samples:\n{exc}")
+            return
+        QApplication.restoreOverrideCursor()
+
+        dialog = QDialog(self.window())
+        dialog.setWindowTitle(f"Preview — {display_name}")
+        dialog.setMinimumSize(520, 520)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        grid = QGridLayout(container)
+        grid.setSpacing(6)
+
+        cols = 4
+        for idx, (img_array, label_text) in enumerate(samples):
+            row, col = divmod(idx, cols)
+
+            cell = QWidget()
+            cell_layout = QVBoxLayout(cell)
+            cell_layout.setContentsMargins(2, 2, 2, 2)
+            cell_layout.setSpacing(2)
+
+            # Convert numpy array → QPixmap
+            pixmap = self._array_to_pixmap(img_array)
+            img_lbl = QLabel()
+            img_lbl.setPixmap(pixmap.scaled(
+                96, 96,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            ))
+            img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+            cap_lbl = QLabel(label_text)
+            cap_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            cap_lbl.setStyleSheet("font-size: 10px; color: #cccccc;")
+
+            cell_layout.addWidget(img_lbl)
+            cell_layout.addWidget(cap_lbl)
+            grid.addWidget(cell, row, col)
+
+        scroll.setWidget(container)
+        dlg_layout = QVBoxLayout(dialog)
+        dlg_layout.addWidget(scroll)
+        dialog.exec()
+
+    # ── helpers ───────────────────────────────────────────────────────────────
+
+    # Maps BuiltinDataset enum → (torchvision class name, class labels list or None)
+    _TV_MAP = {
+        BuiltinDataset.MNIST:         ("MNIST",        None),
+        BuiltinDataset.FASHION_MNIST: ("FashionMNIST", [
+            "T-shirt", "Trouser", "Pullover", "Dress", "Coat",
+            "Sandal", "Shirt", "Sneaker", "Bag", "Ankle boot"]),
+        BuiltinDataset.KMNIST:        ("KMNIST",       None),
+        BuiltinDataset.CIFAR10:       ("CIFAR10",      [
+            "airplane", "automobile", "bird", "cat", "deer",
+            "dog", "frog", "horse", "ship", "truck"]),
+        BuiltinDataset.CIFAR100:      ("CIFAR100",     None),
+        BuiltinDataset.SVHN:          ("SVHN",         None),
+        BuiltinDataset.STL10:         ("STL10",        [
+            "airplane", "bird", "car", "cat", "deer",
+            "dog", "horse", "monkey", "ship", "truck"]),
+    }
+
+    def _load_preview_samples(self, builtin_type: BuiltinDataset, n: int):
+        """
+        Returns a list of (numpy_array, label_str) tuples.
+        Downloads the dataset to the system temp dir if not already cached.
+        """
+        import tempfile, numpy as np
+        import torchvision.datasets as tvd
+        import torchvision.transforms as T
+
+        tv_name, class_names = self._TV_MAP.get(builtin_type, (None, None))
+        if tv_name is None:
+            raise ValueError(f"No torchvision mapping for {builtin_type}")
+
+        cache_dir = tempfile.gettempdir()
+        transform = T.ToTensor()
+
+        cls = getattr(tvd, tv_name)
+        # SVHN and STL10 use 'split' instead of 'train'
+        if tv_name in ("SVHN", "STL10"):
+            ds = cls(root=cache_dir, split="train", download=True, transform=transform)
+        else:
+            ds = cls(root=cache_dir, train=True, download=True, transform=transform)
+
+        samples = []
+        for i in range(min(n, len(ds))):
+            img_tensor, label_idx = ds[i]
+            # img_tensor shape: (C, H, W) in [0, 1]
+            arr = (img_tensor.permute(1, 2, 0).numpy() * 255).clip(0, 255).astype("uint8")
+            if arr.shape[2] == 1:
+                arr = arr[:, :, 0]   # grayscale → 2-D for QImage
+
+            if class_names:
+                label_str = class_names[label_idx] if label_idx < len(class_names) else str(label_idx)
+            else:
+                label_str = str(label_idx)
+
+            samples.append((arr, label_str))
+
+        return samples
+
+    def _array_to_pixmap(self, arr) -> QPixmap:
+        """Converts a uint8 numpy array (H,W) or (H,W,3) to QPixmap."""
+        import numpy as np
+        if arr.ndim == 2:
+            # Grayscale
+            h, w = arr.shape
+            arr_c = np.ascontiguousarray(arr)
+            qimg = QImage(arr_c.data, w, h, w, QImage.Format.Format_Grayscale8)
+        else:
+            h, w, c = arr.shape
+            arr_c = np.ascontiguousarray(arr)
+            if c == 3:
+                qimg = QImage(arr_c.data, w, h, w * 3, QImage.Format.Format_RGB888)
+            else:
+                qimg = QImage(arr_c.data, w, h, w * 4, QImage.Format.Format_RGBA8888)
+        return QPixmap.fromImage(qimg.copy())   # .copy() detaches from numpy buffer
 
     # ADDED: called by MainWindow._on_project_changed() after a project is loaded.
     # Repopulates the combo and labels from the loaded project's dataset so

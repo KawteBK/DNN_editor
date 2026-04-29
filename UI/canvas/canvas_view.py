@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsLineItem
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsLineItem, QMessageBox
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen
 from PyQt6.QtCore import Qt, QPointF
 
@@ -169,16 +169,29 @@ class CanvasView(QGraphicsView):
                     start.x(), start.y(), start.x(), start.y(), pen
                 )
                 return
-        # ADDED: left-click selects node and tells NetworkVM
+        # ADDED: left-click selects node and tells NetworkVM.
+        # Shift+click adds to / removes from selection (multi-select).
         elif event.button() == Qt.MouseButton.LeftButton:
             scene_pos = self.mapToScene(event.pos())
             item = self.scene.itemAt(scene_pos, self.transform())
             while item and not isinstance(item, NodeItem):
                 item = item.parentItem()
+
+            shift_held = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+
             if isinstance(item, NodeItem):
-                self.network_vm.select_layer(item.layer_id)
+                if shift_held:
+                    # Toggle this node in/out of the selection without
+                    # clearing the rest — don't fall through to super()
+                    # which would clear everything else.
+                    item.setSelected(not item.isSelected())
+                    self.network_vm.select_layer(item.layer_id)
+                    return
+                else:
+                    self.network_vm.select_layer(item.layer_id)
             else:
-                self.network_vm.select_layer(None)
+                if not shift_held:
+                    self.network_vm.select_layer(None)
 
         super().mousePressEvent(event)
 
@@ -225,14 +238,44 @@ class CanvasView(QGraphicsView):
         # Both must be handled so the shortcut works cross-platform.
         _DELETE_KEYS = (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
         if event.key() in _DELETE_KEYS:
-            for item in self.scene.selectedItems():
-                if isinstance(item, NodeItem):
-                    self.network_vm.remove_layer(item.layer_id)
-                elif isinstance(item, ConnectionItem):
-                    self.network_vm.remove_connection(
-                        item.start_node.layer_id,
-                        item.end_node.layer_id,
-                    )
+            selected = self.scene.selectedItems()
+            nodes = [i for i in selected if isinstance(i, NodeItem)]
+            conns = [i for i in selected if isinstance(i, ConnectionItem)]
+
+            if not nodes and not conns:
+                super().keyPressEvent(event)
+                return
+
+            # Build a human-readable summary of what will be deleted
+            parts = []
+            if nodes:
+                # NodeItem stores the display name — try .name then fall back to .layer_id
+                def _node_label(n):
+                    return getattr(n, "name", None) or getattr(n, "layer_id", "?")
+                names = ", ".join(f'"{_node_label(n)}"' for n in nodes)
+                parts.append(f"{len(nodes)} layer(s): {names}")
+            if conns:
+                parts.append(f"{len(conns)} connection(s)")
+            summary = "\n".join(parts)
+
+            reply = QMessageBox.question(
+                self,
+                "Confirm Delete",
+                f"Delete the following?\n\n{summary}",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                QMessageBox.StandardButton.Cancel,
+            )
+            if reply != QMessageBox.StandardButton.Yes:
+                super().keyPressEvent(event)
+                return
+
+            for item in nodes:
+                self.network_vm.remove_layer(item.layer_id)
+            for item in conns:
+                self.network_vm.remove_connection(
+                    item.start_node.layer_id,
+                    item.end_node.layer_id,
+                )
         super().keyPressEvent(event)
 
         #for the animated connection

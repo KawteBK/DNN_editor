@@ -188,7 +188,7 @@ class OngletInference(QWidget):
 
         self.image_preview = QLabel()
         self.image_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_preview.setFixedHeight(70)
+        self.image_preview.setFixedHeight(150)
         self.image_preview.setStyleSheet("border:1px solid #ccc; border-radius:8px;")
         self.image_preview.setText("preview")
         layout.addWidget(self.image_preview)
@@ -220,7 +220,7 @@ class OngletInference(QWidget):
 
         layout.addSpacing(8)
 
-        # ── Experiment mode toggle
+        #  Experiment mode toggle
         exp_card = QFrame()
         exp_card.setStyleSheet(
             f"background:{_SURFACE}; border-radius:6px; border:1px solid {_BORDER};"
@@ -521,7 +521,7 @@ class OngletInference(QWidget):
 
     def load_image(self, path: str):
         self._image_path = path
-        pixmap = QPixmap(path).scaled(150, 100, Qt.AspectRatioMode.KeepAspectRatio)
+        pixmap = QPixmap(path).scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio)
         self.image_preview.setPixmap(pixmap)
 
     # ── transform builder ─────────────────────────────────────────────────────
