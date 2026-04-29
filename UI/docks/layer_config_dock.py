@@ -363,15 +363,19 @@ class LayerConfigDock(QDockWidget):
         QTimer.singleShot(200, lambda: field.setStyleSheet(original_bg))
 
     def _push(self, params: dict) -> None:
+        # Guard: while a form builder is populating widgets (setting initial
+        # values, populating combos, checking checkboxes) every signal that
+        # would normally trigger this method is suppressed.  Without this guard,
+        # every setCurrentIndex / setChecked call during rebuild fires
+        # update_layer_params → propagate_shapes unnecessarily on load.
+        if self._suppress_signals:
+            return
         if self._current_layer_id is None:
             return
-    
-        #Find which widget was changed and flash it
+
+        # Flash the field that triggered the change so the user sees feedback.
         sender = self.sender()
         if sender and isinstance(sender, QLineEdit):
             self._flash_field(sender)
-    
+
         self.network_vm.update_layer_params(self._current_layer_id, params)
-
-
-    

@@ -220,8 +220,11 @@ class CanvasView(QGraphicsView):
     # ── keyboard ──────────────────────────────────────────────────────────────
 
     def keyPressEvent(self, event) -> None:
-        # Delete key removes selected nodes AND selected connections.
-        if event.key() == Qt.Key.Key_Delete:
+        # Key_Delete = Windows/Linux "Delete" key.
+        # Key_Backspace = macOS "Delete" key (the only delete key on most Mac keyboards).
+        # Both must be handled so the shortcut works cross-platform.
+        _DELETE_KEYS = (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
+        if event.key() in _DELETE_KEYS:
             for item in self.scene.selectedItems():
                 if isinstance(item, NodeItem):
                     self.network_vm.remove_layer(item.layer_id)

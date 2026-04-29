@@ -1,13 +1,14 @@
+import platform
+import subprocess
+
 try:
-    import winsound  # Windows-only for beeps
-except :
-    pass
+    import winsound  # Windows-only
+except ImportError:
+    winsound = None
 
 
 
 import sys
-from PyQt6.QtMultimedia import QSoundEffect
-from PyQt6.QtCore import QUrl
 import os
 
 
@@ -74,11 +75,7 @@ class MainWindow(QMainWindow):
         menubar.addMenu("Settings")
 
 
-        #setting up sounds———————————
-
-        self.sound = QSoundEffect()
-        self.sound.setSource(QUrl.fromLocalFile("beep.wav"))  # you need a sound file
-        self.sound.setVolume(0.5)
+        # sounds are played via _play_sound() — no asset file required
         # ── toolbar ───────────────────────────────────────────────────────────
         toolbar = QToolBar()
         self.addToolBar(toolbar)
@@ -143,20 +140,18 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._central_stack)
 
 
-        # Tab style — matches ResultsDock's _TAB_STYLE exactly
-        self.tabs.setStyleSheet("""
-    QTabWidget::pane { border: none; background: #2b2b2b; }
+        #style for teh tabs! sorry you were too ugly
+
+        self.tabs.setStyleSheet("""  # added this for aang
     QTabBar::tab {
-        background: #393d3f; color: #888888;
-        padding: 8px 18px; border: none;
-        font-size: 13px; font-weight: bold;
+        font-size: 13px;
+        font-weight: bold;
+        padding: 8px 16px;
         min-width: 80px;
     }
     QTabBar::tab:selected {
-        background: #2b2b2b; color: #cccccc;
-        border-bottom: 2px solid #06b6d4;
+        background-color: #3c3f41;
     }
-    QTabBar::tab:hover { color: #cccccc; }
 """)
 
         # ── docks ─────────────────────────────────────────────────────────────
@@ -446,21 +441,9 @@ class MainWindow(QMainWindow):
         if project.trainingLogs:
             self.results_dock.on_training_finished(project.trainingLogs)
     
-        # Play sound
-        self.sound.play()
-    
-        # Show notification
-        from PyQt6.QtWidgets import QSystemTrayIcon, QMenu
-    
-        if QSystemTrayIcon.isSystemTrayAvailable():
-            tray_icon = QSystemTrayIcon(self)
-            tray_icon.show()
-            tray_icon.showMessage(
-                "Training Complete", 
-                f"Finished in {elapsed:.0f} seconds!",
-                QSystemTrayIcon.MessageIcon.Information,
-                3000
-            )
+        # Play sound + notify
+        self._play_sound()
+        self._show_notification("Training Complete", f"Finished in {elapsed:.0f} seconds!")
     
         self.statusBar().showMessage(f"Training complete — {elapsed:.0f}s", 5000)
 
@@ -564,16 +547,74 @@ class MainWindow(QMainWindow):
         else:
             self.btn_train.setToolTip("No project loaded")
 
+    def _play_sound(self) -> None:
+        """Play a completion beep cross-platform (no asset file required)."""
+        try:
+            system = platform.system()
+            if system == "Darwin":
+                subprocess.Popen(
+                    ["afplay", "/System/Library/Sounds/Glass.aiff"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            elif system == "Windows" and winsound:
+                winsound.MessageBeep(winsound.MB_ICONINFORMATION)
+            else:
+                # Linux: try paplay (PulseAudio) then aplay (ALSA)
+                for cmd in [
+                    ["paplay", "/usr/share/sounds/freedesktop/stereo/complete.oga"],
+                    ["aplay",  "/usr/share/sounds/alsa/Front_Center.wav"],
+                ]:
+                    if subprocess.call(
+                        ["which", cmd[0]],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    ) == 0:
+                        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        break
+        except Exception:
+            pass  # sound is optional — never crash over it
+
+    def _show_notification(self, title: str, message: str) -> None:
+        """Show an OS notification cross-platform."""
+        try:
+            system = platform.system()
+            if system == "Darwin":
+                # osascript works on every macOS version without extra deps
+                script = (
+                    f'display notification "{message}" '
+                    f'with title "{title}"'
+                )
+                subprocess.Popen(
+                    ["osascript", "-e", script],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                )
+            elif system == "Windows":
+                from PyQt6.QtWidgets import QSystemTrayIcon
+                if QSystemTrayIcon.isSystemTrayAvailable():
+                    tray_icon = QSystemTrayIcon(self)
+                    tray_icon.show()
+                    tray_icon.showMessage(
+                        title, message,
+                        QSystemTrayIcon.MessageIcon.Information, 3000,
+                    )
+            else:
+                # Linux: try notify-send (libnotify)
+                if subprocess.call(
+                    ["which", "notify-send"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                ) == 0:
+                    subprocess.Popen(
+                        ["notify-send", title, message],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    )
+        except Exception:
+            pass  # notification is optional — never crash over it
+
     #  enhance status message method
     def _show_status(self, message: str, duration_ms: int = 3000):
-        """Show status message with optional beep for important messages."""
+        """Show status message in the status bar, with a beep for key events."""
         self.statusBar().showMessage(message, duration_ms)
-        # Optional: beep for important messages
         if "saved" in message.lower() or "complete" in message.lower():
-            try:
-                winsound.MessageBeep(winsound.MB_ICONINFORMATION)
-            except:
-                pass
+            self._play_sound()
 
     def closeEvent(self, event):
         """Show confirmation dialog before quitting."""

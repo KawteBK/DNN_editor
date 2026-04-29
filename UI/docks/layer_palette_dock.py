@@ -31,7 +31,7 @@ class LayerPaletteDock(QDockWidget):
         QPushButton {{
             background-color: {base_color};
             color: #f7f5ff;
-            border: none;
+            border: 1px solid {dark_color};
             padding: 4px;
             border-radius: 6px;
             font-weight: bold;
