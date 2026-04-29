@@ -80,8 +80,12 @@ class PyTorchTrainer:
                     history[key].append(round(val_metrics.get(m.value, 0.0), 6))
 
             # ── optional UI callback ──────────────────────────────────────────
-            if on_epoch is not None:
-                on_epoch(epoch + 1, epochs, train_loss, val_metrics)
+            
+                
+
+            if on_epoch is not None:  # added this for aang
+                if on_epoch(epoch + 1, epochs, train_loss, val_metrics) is False:  # added this for aang
+                    break  # added this for aang
 
             # ── early stopping ────────────────────────────────────────────────
             if early_stop and val_loader:

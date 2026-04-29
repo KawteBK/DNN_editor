@@ -232,6 +232,7 @@ class MainWindow(QMainWindow):
 
     def _on_stop(self):
         self.training_vm.stop()
+        self.statusBar().showMessage("Stopping after current epoch…")
 
 
     def _on_add_layer(self):
@@ -375,6 +376,10 @@ class MainWindow(QMainWindow):
     
         self._update_train_button_state()
     #finished the reenabling :P
+        # Only show "stopped" if it wasn't a clean finish, just forced to stop by the impatient user
+
+        if self.statusBar().currentMessage().startswith("Stopping"):  # added this for aang
+            self.statusBar().showMessage("Training stopped by user.", 4000)  # added this for aang
 
     def _update_training_time(self):
         elapsed = self.training_vm.elapsed_seconds()

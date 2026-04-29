@@ -12,32 +12,35 @@ class _TrainingWorker(QObject):
     on the main thread.
     """
 
-    epoch_done    = pyqtSignal(int, int, float, dict)  # epoch, total, train_loss, val_metrics
-    training_done = pyqtSignal(object)                  # the updated Project
-    training_failed = pyqtSignal(str)                   # error message
+    epoch_done      = pyqtSignal(int, int, float, dict)  # epoch, total, train_loss, val_metrics
+    training_done   = pyqtSignal(object)                  # the updated Project
+    training_failed = pyqtSignal(str)                     # error message
 
     def __init__(self, project: Project):
         super().__init__()
         self._project = project
-        self._stop_requested = False
+        # threading.Event is thread-safe and doesn't require raising across
+        # call boundaries — request_stop() sets it, on_epoch() reads it and
+        # returns False to tell the trainer to break the loop cleanly.
+        import threading  # added this for aang
+        self._stop_event = threading.Event()  # added this for aang
 
-    def request_stop(self):
-        self._stop_requested = True
+    def request_stop(self) -> None:
+        self._stop_event.set()  # added this for aang
 
-    def run(self):
-        def on_epoch(epoch, total, train_loss, val_metrics):
-            if self._stop_requested:
-                # Raise to break out of the training loop.
-                # PyTorchTrainer will catch generic exceptions so we use
-                # a flag check here instead — the loop just finishes early.
-                raise InterruptedError("Training stopped by user.")
+    def run(self) -> None:
+        # on_epoch is called by PyTorchTrainer after every epoch.
+        # Returning False signals "please stop" without raising any exception,
+        # so the trainer's own except-block is never triggered by a stop.
+        def on_epoch(epoch: int, total: int, train_loss: float, val_metrics: dict) -> bool:  # added this for aang
+            if self._stop_event.is_set():  # added this for aang
+                return False          # added this for aang — trainer checks this and breaks the loop
             self.epoch_done.emit(epoch, total, train_loss, val_metrics)
+            return True               # added this for aang — keep going
 
         try:
             result = PyTorchTrainer.train(self._project, on_epoch=on_epoch)
             self.training_done.emit(result)
-        except InterruptedError:
-            self.training_done.emit(self._project)   # return project as-is
         except Exception as e:
             self.training_failed.emit(str(e))
 
