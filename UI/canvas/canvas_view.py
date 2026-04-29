@@ -25,6 +25,11 @@ class CanvasView(QGraphicsView):
         # ADDED: (from_id, to_id) → ConnectionItem lookup for removal
         self._connections: dict[tuple, ConnectionItem] = {}
 
+        # Monotonically increasing spawn counter — never reset even when nodes
+        # are deleted, so a freshly added layer never reuses a slot occupied by
+        # a surviving node.
+        self._spawn_counter: int = 0
+
         # ADDED: rubber-band line drawn while the user drags a new connection
         self._pending_line: QGraphicsLineItem | None = None
         self._drag_source_node: NodeItem | None = None
@@ -39,14 +44,63 @@ class CanvasView(QGraphicsView):
     # ── NetworkVM signal handlers ─────────────────────────────────────────────
 
     def _on_layer_added(self, layer_id: str, layer_type: str, name: str) -> None:
-        # ADDED: creates the visual NodeItem when NetworkVM confirms a layer was added.
-        # Position is auto-staggered so new nodes don't pile on top of each other.
-        offset = len(self._nodes) * 180
-        x = 60 + (offset % (180 * 4))
-        y = 80 + (offset // (180 * 4)) * 120
+        # Creates the visual NodeItem when NetworkVM confirms a layer was added.
+        x, y = self._next_spawn_position()
         node = NodeItem(layer_id, name, layer_type, x, y)
         self.scene.addItem(node)
         self._nodes[layer_id] = node
+        self._spawn_counter += 1
+
+    # ── spawn position helpers ────────────────────────────────────────────────
+
+    # Padding around each cell so nodes never touch each other.
+    _CELL_PAD_X = 30   # horizontal gap between columns
+    _CELL_PAD_Y = 30   # vertical gap between rows
+    # How many columns before wrapping to the next row.
+    # Wide enough for a typical canvas; can be changed without touching anything else.
+    _GRID_COLS  = 4
+
+    def _next_spawn_position(self) -> tuple[float, float]:
+        """
+        Return (x, y) for the next new node using a two-pass strategy:
+
+        Pass 1 — find the first grid cell (in reading order) that is free,
+                  i.e. no existing node's bounding rect overlaps it.
+        Pass 2 — if every cell up to the current spawn count is occupied
+                  (unlikely but possible after many add/delete cycles),
+                  fall back to appending a new cell beyond all existing ones.
+
+        Grid origin is (60, 60).  Cell size = node footprint + padding.
+        """
+        from canvas.node_item import NODE_WIDTH, NODE_HEIGHT
+
+        cell_w = NODE_WIDTH  + self._CELL_PAD_X
+        cell_h = NODE_HEIGHT + self._CELL_PAD_Y
+        origin_x, origin_y = 60, 60
+
+        # Collect bounding rects of every existing node (scene coordinates).
+        occupied = [n.sceneBoundingRect() for n in self._nodes.values()]
+
+        def _cell_xy(index: int) -> tuple[float, float]:
+            col = index % self._GRID_COLS
+            row = index // self._GRID_COLS
+            return origin_x + col * cell_w, origin_y + row * cell_h
+
+        def _is_free(cx: float, cy: float) -> bool:
+            """True when no existing node overlaps the candidate cell."""
+            from PyQt6.QtCore import QRectF
+            candidate = QRectF(cx, cy, NODE_WIDTH, NODE_HEIGHT)
+            return not any(candidate.intersects(r) for r in occupied)
+
+        # Pass 1: scan grid cells in reading order up to spawn_counter + slack.
+        search_limit = max(self._spawn_counter + 1, len(self._nodes) + self._GRID_COLS)
+        for i in range(search_limit):
+            cx, cy = _cell_xy(i)
+            if _is_free(cx, cy):
+                return cx, cy
+
+        # Pass 2: just append after the last used cell index.
+        return _cell_xy(self._spawn_counter)
 
     def _on_layer_removed(self, layer_id: str) -> None:
         # ADDED: removes the NodeItem when NetworkVM confirms deletion.
@@ -87,11 +141,12 @@ class CanvasView(QGraphicsView):
     # ── canvas reset (called when a project is loaded) ────────────────────────
 
     def clear_canvas(self) -> None:
-        # ADDED: wipes all visuals. Called by NetworkVM.set_network() indirectly —
-        # MainWindow calls this before set_network() re-emits layer_added signals.
+        # Wipes all visuals. Called by MainWindow before set_network() re-emits
+        # layer_added signals for the freshly loaded project.
         self.scene.clear()
         self._nodes.clear()
         self._connections.clear()
+        self._spawn_counter = 0   # reset so loaded projects start from cell (0,0)
 
     # ── mouse events for drag-to-connect ─────────────────────────────────────
 

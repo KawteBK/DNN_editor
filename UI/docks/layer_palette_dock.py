@@ -1,5 +1,7 @@
 from PyQt6.QtWidgets import QDockWidget, QScrollArea, QWidget, QVBoxLayout, QPushButton, QLabel
 
+from UI.canvas.node_item import LAYER_COLORS
+
 
 class LayerPaletteDock(QDockWidget):
     # CHANGED: accepts network_vm instead of canvas
@@ -22,9 +24,28 @@ class LayerPaletteDock(QDockWidget):
 
         for layer_type in layers:
             btn = QPushButton(layer_type)
-            # CHANGED: calls network_vm.add_layer() instead of canvas.add_node().
-            # network_vm creates the Core layer, then emits layer_added,
-            # which the canvas receives and uses to draw the NodeItem.
+
+            base_color, dark_color = LAYER_COLORS[layer_type]
+
+            btn.setStyleSheet(f"""
+        QPushButton {{
+            background-color: {base_color};
+            color: #f7f5ff;
+            border: none;
+            padding: 4px;
+            border-radius: 6px;
+            font-weight: bold;
+        }}
+        QPushButton:hover {{
+            background-color: {dark_color};
+        }}
+        QPushButton:pressed {{
+            background-color: {dark_color};
+            padding-left: 8px;
+            padding-top: 8px;
+        }}
+    """)
+
             btn.clicked.connect(lambda checked, t=layer_type: self.network_vm.add_layer(t))
             layout.addWidget(btn)
 
