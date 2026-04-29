@@ -61,12 +61,20 @@ class PyTorchTrainer:
             for m in nc._metric:
                 history[f"val_{m.value}"] = []
 
+        # added this for aang — unwrap a stop-check callable if the caller embedded one
+        # on_epoch is wrapped in training_vm.py to carry _stop_check alongside it
+        _should_stop = getattr(on_epoch, '_stop_check', None)
+
         # ── epoch loop ────────────────────────────────────────────────────────
         for epoch in range(epochs):
 
             train_loss = PyTorchTrainer._train_one_epoch(
-                model, train_loader, optimizer, criterion, device
+                model, train_loader, optimizer, criterion, device,
+                should_stop=_should_stop,  # added this for aang
             )
+            # added this for aang — if stop was requested mid-batch, break the epoch loop too
+            if _should_stop is not None and _should_stop():
+                break
             history["train_loss"].append(round(train_loss, 6))
 
             val_metrics = {}
@@ -265,17 +273,25 @@ class PyTorchTrainer:
 
 
     @staticmethod
-    def _train_one_epoch(model, loader, optimizer, criterion, device) -> float:
+    def _train_one_epoch(model, loader, optimizer, criterion, device,
+                         should_stop=None) -> float:  # added this for aang
         """
         One full pass over the training DataLoader.
 
         Sets model.train() so dropout and batchnorm behave correctly.
         Returns average loss over the epoch (total loss / number of samples).
+
+        should_stop: optional callable () -> bool checked before every batch
+        so Stop takes effect within one batch instead of one full epoch.
         """
         model.train()
         running_loss = 0.0
+        samples_seen = 0  # added this for aang — need own counter since we may break early
 
         for inputs, labels in loader:
+            if should_stop is not None and should_stop():  # added this for aang
+                break                                       # added this for aang
+
             inputs, labels = inputs.to(device), labels.to(device)
 
             optimizer.zero_grad()
@@ -284,9 +300,12 @@ class PyTorchTrainer:
             loss.backward()
             optimizer.step()
 
-            running_loss += loss.item() * inputs.size(0)   # un-average the batch loss
+            batch_samples = inputs.size(0)
+            running_loss += loss.item() * batch_samples
+            samples_seen += batch_samples  # added this for aang
 
-        return running_loss / len(loader.dataset)
+        # added this for aang — avoid div-by-zero if stopped before any batch ran
+        return running_loss / samples_seen if samples_seen > 0 else 0.0
 
     @staticmethod
     def _evaluate(model, loader, criterion, device, metrics: list) -> dict:

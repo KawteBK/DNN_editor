@@ -38,6 +38,11 @@ class _TrainingWorker(QObject):
             self.epoch_done.emit(epoch, total, train_loss, val_metrics)
             return True               # added this for aang — keep going
 
+        # added this for aang — attach a lightweight stop-check callable onto the
+        # on_epoch function object so _train_one_epoch can poll it between batches.
+        # This is what makes Stop respond within one batch instead of one full epoch.
+        on_epoch._stop_check = self._stop_event.is_set  # added this for aang
+
         try:
             result = PyTorchTrainer.train(self._project, on_epoch=on_epoch)
             self.training_done.emit(result)
