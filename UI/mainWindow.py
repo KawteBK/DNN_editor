@@ -403,6 +403,7 @@ class MainWindow(QMainWindow):
 
         # Project just came from disk — nothing is unsaved yet
         self._dirty = False
+        print("hello from mainwindow project changed")
 
         if project.dataset and project.networkConfig:
           self._refresh_code_tab()

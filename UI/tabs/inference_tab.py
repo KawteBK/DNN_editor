@@ -164,21 +164,21 @@ class OngletInference(QWidget):
         # ── mode buttons
         mode_row = QHBoxLayout()
         self.btn_single = QPushButton("Single image")
-        self.btn_batch  = QPushButton("Batch folder")
+        #self.btn_batch  = QPushButton("Batch folder")
         self.btn_single.setCheckable(True)
         self.btn_single.setChecked(True)
-        self.btn_batch.setCheckable(True)
+        #self.btn_batch.setCheckable(True)
         _active_style = """
             QPushButton { padding:8px; border-radius:8px;
                           background:#1592A2; color:white; }
             QPushButton:hover { background:#0e6b77; }
         """
         self.btn_single.setStyleSheet(_active_style)
-        self.btn_batch.setStyleSheet("padding:8px; border-radius:8px;")
+        #self.btn_batch.setStyleSheet("padding:8px; border-radius:8px;")
         self.btn_single.clicked.connect(lambda: self._set_mode("single"))
-        self.btn_batch.clicked.connect(lambda: self._set_mode("batch"))
+        #self.btn_batch.clicked.connect(lambda: self._set_mode("batch"))
         mode_row.addWidget(self.btn_single)
-        mode_row.addWidget(self.btn_batch)
+        #mode_row.addWidget(self.btn_batch)
         layout.addLayout(mode_row)
 
         # ── drop zone + preview
@@ -509,7 +509,7 @@ class OngletInference(QWidget):
         """
         inactive = "padding:8px; border-radius:8px;"
         self.btn_single.setStyleSheet(active   if mode == "single" else inactive)
-        self.btn_batch.setStyleSheet (inactive if mode == "single" else active)
+        #self.btn_batch.setStyleSheet (inactive if mode == "single" else active)
 
     def browse_image(self):
         path, _ = QFileDialog.getOpenFileName(

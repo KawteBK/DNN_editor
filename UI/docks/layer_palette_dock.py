@@ -1,6 +1,17 @@
 from PyQt6.QtWidgets import QDockWidget, QScrollArea, QWidget, QVBoxLayout, QPushButton, QLabel
 
-from UI.canvas.node_item import LAYER_COLORS
+#from UI.canvas.node_item import LAYER_COLORS
+
+LAYER_COLORS = {
+    "InputLayer":  ("#24A35983", "#1A7A43"),   # green   always the root
+    "Dense":       ("#1592A283", "#105860"),   # teal
+    "Conv2D":      ("#7F77DD83", "#4A4490"),   # purple
+    "Pooling":     ("#E67E2283", "#9A5515"),   # amber
+    "Recurrent":   ("#D85A3083", "#8C3515"),   # coral
+    "Flatten":     ("#B2992883", "#906E00"),   # yellowish brown 5ra vibes
+    "Activation":  ("#D4537E83", "#8C2E4F"),   # pink
+    "Merge":       ("#956AA683", "#6C3483"),   # purpley-pink, twilight sparkle vibes
+}
 
 
 class LayerPaletteDock(QDockWidget):
