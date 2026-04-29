@@ -165,12 +165,16 @@ class CanvasView(QGraphicsView):
     # ── keyboard ──────────────────────────────────────────────────────────────
 
     def keyPressEvent(self, event) -> None:
-        # ADDED: Delete key removes the selected node via NetworkVM.
-        # NetworkVM also removes all its connections and emits the right signals.
+        # Delete key removes selected nodes AND selected connections.
         if event.key() == Qt.Key.Key_Delete:
             for item in self.scene.selectedItems():
                 if isinstance(item, NodeItem):
                     self.network_vm.remove_layer(item.layer_id)
+                elif isinstance(item, ConnectionItem):
+                    self.network_vm.remove_connection(
+                        item.start_node.layer_id,
+                        item.end_node.layer_id,
+                    )
         super().keyPressEvent(event)
 
         #for the animated connection
