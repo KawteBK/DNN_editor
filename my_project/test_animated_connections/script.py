@@ -20,7 +20,7 @@ from sklearn.metrics import f1_score, precision_score, recall_score
         def __init__(self):
             super().__init__()
             self.net = nn.Sequential(
-                nn.Flatten(start_dim=1),  # Flatten 1
+                nn.Flatten(start_dim=1),  # Flatten3
             nn.Linear(784, 128, bias=True),  # Densekkk
             )
 

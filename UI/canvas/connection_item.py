@@ -13,7 +13,7 @@ class ConnectionItem(QGraphicsLineItem):
         self._timer = None
         
         # Normal style (not animating)
-        self.normal_pen = QPen(QColor("#FFFFFF"), 2)
+        self.normal_pen = QPen(QColor("#81D4FA"), 2)
         self.setPen(self.normal_pen)
         
         start_node.connections.append(self)

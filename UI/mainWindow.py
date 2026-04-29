@@ -1,4 +1,8 @@
 import sys
+try:
+    import winsound
+except:
+    pass
 from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6.QtCore import QUrl
 import os
@@ -72,13 +76,13 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         toolbar.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
 
-        self.btn_stop  = QPushButton("Stop")
-        self.btn_train = QPushButton("Train")
-        btn_delete     = QPushButton("Delete")
-        btn_add        = QPushButton("Add")
+        self.btn_stop   = QPushButton("Stop")
+        self.btn_train  = QPushButton("Train")
+        self.btn_delete = QPushButton("Delete")
+        self.btn_add    = QPushButton("Add")
 
-        btn_add.clicked.connect(self._on_add_layer)
-        btn_delete.clicked.connect(self._on_delete_selected)
+        self.btn_add.clicked.connect(self._on_add_layer)
+        self.btn_delete.clicked.connect(self._on_delete_selected)
 
         self.btn_train.setStyleSheet(
             "background-color: #28a745; color: white; padding: 5px 15px;"
@@ -94,8 +98,8 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.btn_stop)
         toolbar.addWidget(self.btn_train)
         toolbar.addSeparator()
-        toolbar.addWidget(btn_delete)
-        toolbar.addWidget(btn_add)
+        toolbar.addWidget(self.btn_delete)
+        toolbar.addWidget(self.btn_add)
         toolbar.addSeparator()
 
         self.training_time_label = QLabel("Training Time: --")
@@ -491,6 +495,10 @@ class MainWindow(QMainWindow):
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.hide()
+        # hide toolbar buttons that make no sense on the welcome screen
+        for w in [self.btn_train, self.btn_stop, self.btn_add,
+                  self.btn_delete, self.training_time_label]:
+            w.hide()
 
 
 
@@ -511,6 +519,10 @@ class MainWindow(QMainWindow):
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.show()
+        # restore toolbar buttons
+        for w in [self.btn_train, self.btn_stop, self.btn_add,
+                  self.btn_delete, self.training_time_label]:
+            w.show()
 
 
     def _update_train_button_state(self): 

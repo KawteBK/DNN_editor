@@ -86,10 +86,10 @@ class WelcomeScreen(QWidget):
 
     def _build_card(self) -> QWidget:
         card = QWidget()
-        card.setFixedWidth(420)
+        card.setFixedWidth(420) # OG GRAY: #2b2d30
         card.setStyleSheet("""
             QWidget {
-                background-color: #2b2d30;
+                background-color: #2b2d30;  
                 border: 1px solid #3c3f41;
                 border-radius: 6px;
             }
@@ -100,7 +100,7 @@ class WelcomeScreen(QWidget):
         layout.setSpacing(0)
 
         # ── logo / app name ────────────────────────────────────────────────
-        logo = QLabel("⬡")
+        logo = QLabel("⬡") # a hexagonal shape to evoke the idea of a neural network node, and also because it looks cool, buuut i want to later change it to a custom SVG icon that i design myself, maybe with some circuitry patterns inside the hexagon to make it more unique and thematic
         logo.setAlignment(Qt.AlignmentFlag.AlignCenter)
         logo.setStyleSheet("""
             color: #4FC3F7;
@@ -111,7 +111,7 @@ class WelcomeScreen(QWidget):
         layout.addWidget(logo)
         layout.addSpacing(10)
 
-        title = QLabel("DNN Editor")
+        title = QLabel("NeuroCraft")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         title.setFont(QFont("Consolas", 22, QFont.Weight.Bold))
         title.setStyleSheet("color: #d4d4d4; background: transparent; border: none;")
