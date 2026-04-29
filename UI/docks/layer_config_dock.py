@@ -21,9 +21,8 @@ class LayerConfigDock(QDockWidget):
         self._suppress_signals = False   # ADDED: prevents feedback loops while populating
 
         # ADDED: scroll area so the form doesn't get clipped on small screens
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        
             
 
 
@@ -32,8 +31,10 @@ class LayerConfigDock(QDockWidget):
         self._form_widget.setLayout(self._layout)
         scroll = QScrollArea()
         scroll.setWidget(self._form_widget)
-        scroll.setWidgetResizable(True)
         self.setWidget(scroll)
+        scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
 
         self._layout.setLabelAlignment(Qt.AlignmentFlag.AlignLeft)
 

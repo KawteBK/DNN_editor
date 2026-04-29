@@ -50,6 +50,24 @@ class DatasetDock(QDockWidget):
         self.preview_btn = QPushButton("Preview")
         layout.addWidget(self.preview_btn)
 
+
+         # ── status badge ── this addo is for katara ───────────────────────────
+        self._status_label = QLabel()  # this addo is for katara
+        self._status_label.setVisible(False)  # this addo is for katara
+        self._status_label.setStyleSheet(  # this addo is for katara
+            "color: #22c55e;"
+            "font-size: 11px;"
+            "font-weight: bold;"
+            "padding: 4px 8px;"
+            "background: #14532d;"
+            "border: 1px solid #22c55e;"
+            "border-radius: 4px;"
+        )
+        layout.addWidget(self._status_label)  # this addo is for katara
+        self._status_timer = QTimer(self)  # this addo is for katara
+        self._status_timer.setSingleShot(True)  # this addo is for katara
+        self._status_timer.timeout.connect(self._clear_status) 
+
         layout.addStretch()
         widget.setLayout(layout)
         self.setWidget(widget)
@@ -71,10 +89,23 @@ class DatasetDock(QDockWidget):
         info = _DISPLAY_INFO.get(display_name)
         if info:
             self.project_vm.set_dataset(info[5])
+            self._show_status(f"✓  {display_name} selected") 
             #  find the main window and update train button
             main_window = self.window()
             if hasattr(main_window, '_update_train_button_state'):
                 main_window._update_train_button_state()
+            
+
+
+    def _show_status(self, text: str, duration_ms: int = 2500) -> None:  # this addo is for katara
+        """Flash the green status badge for duration_ms then hide it."""
+        self._status_label.setText(text)  # this addo is for katara
+        self._status_label.setVisible(True)  # this addo is for katara
+        self._status_timer.start(duration_ms)  # this addo is for katara
+ 
+    def _clear_status(self) -> None:  # this addo is for katara
+        self._status_label.setVisible(False)  # this addo is for katara
+ 
 
 
     def _update_labels(self, display_name: str) -> None:
