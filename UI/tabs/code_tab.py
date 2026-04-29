@@ -16,8 +16,18 @@ _BTN_BASE = (
 )
 _BTN_NORMAL_COPY   = _BTN_BASE + "QPushButton { background:#2d2d2d; color:#d4d4d4; }"
 _BTN_FLASHED_COPY  = _BTN_BASE + "QPushButton { background:#1a6b35; color:#ffffff; border-color:#22c55e; }"
-_BTN_EXPORT        = _BTN_BASE + "QPushButton { background:#1e3a5f; color:#93c5fd; border-color:#3b82f6; }"
-
+_BTN_EXPORT = _BTN_BASE + """
+QPushButton {
+  background:#1e3a5f;
+  color:#93c5fd;
+  border: 1px solid #3b82f6;
+}
+QPushButton:pressed {
+  background:#162d4a;
+  padding-left: 20px;
+  padding-top: 8px;
+}
+"""
 
 class CodeTab(QWidget):
     def __init__(self):
