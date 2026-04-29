@@ -63,9 +63,20 @@ class NetworkVM(QObject):
         self._network = network
         self._selected_layer_id = None
         self._node_counter.clear()
-        # Emit for every existing layer and connection so the canvas
-        # can rebuild itself after a load
+
         if network is not None:
+            # Seed counters from IDs already present in the loaded network so
+            # the next add_layer() call never produces a duplicate ID.
+            # IDs are expected to follow the pattern "<type>_<int>", e.g.
+            # "dense_3", "conv2d_1".  Any ID that doesn't match is skipped
+            # safely — it just won't influence the counter for that type.
+            for layer_id in network.layers:                                     #added for appa
+                parts = layer_id.rsplit("_", 1)                                 #added for appa
+                if len(parts) == 2 and parts[1].isdigit():                      #added for appa
+                    key   = parts[0]                                            #added for appa
+                    index = int(parts[1])                                       #added for appa
+                    if index > self._node_counter.get(key, 0):                  #added for appa
+                        self._node_counter[key] = index                         #added for appa
 
             # Ensure shapes are propagated before visual nodes are created
             try:

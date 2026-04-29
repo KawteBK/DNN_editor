@@ -94,6 +94,36 @@ class ProjectVM(QObject):
         except Exception as e:
             self.error_occurred.emit(f"Save failed: {e}")
 
+    def save_as(self, new_folder: str, new_name: str) -> bool:                  #added for appa
+        """
+        Saves the current project under a new name and location.
+
+        - new_folder: parent directory chosen by the user (via QFileDialog).
+        - new_name:   project name entered by the user.
+
+        Updates project.path and project.name in-place so subsequent
+        Ctrl+S saves go to the new location.  Emits project_changed so
+        the window title refreshes.  Returns True on success.
+        """                                                                      #added for appa
+        if self._project is None:                                               #added for appa
+            self.error_occurred.emit("No project to save.")                     #added for appa
+            return False                                                         #added for appa
+        try:                                                                     #added for appa
+            new_path = os.path.join(new_folder, new_name.strip())              #added for appa
+            os.makedirs(new_path, exist_ok=True)                               #added for appa
+
+            # Mutate the live project object so everything stays in sync        #added for appa
+            self._project.path = new_path                                       #added for appa
+            self._project.name = new_name.strip()                              #added for appa
+
+            ProjectManager.save(self._project)                                  #added for appa
+            # Fire project_changed so the window title and dirty flag refresh   #added for appa
+            self.project_changed.emit(self._project)                            #added for appa
+            return True                                                          #added for appa
+        except Exception as e:                                                  #added for appa
+            self.error_occurred.emit(f"Save As failed: {e}")                   #added for appa
+            return False                                                         #added for appa
+
     def load(self, project_dir: str) -> None:
         """
         Loads a project from a directory. On success emits project_changed.

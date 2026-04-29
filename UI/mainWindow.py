@@ -61,10 +61,11 @@ class MainWindow(QMainWindow):
         self._file_menu.addAction("New project", self._on_new)
         self._file_menu.addAction("Open",        self._on_open)
         self._file_menu.addAction("Save",        self._on_save)
+        self._file_menu.addAction("Save As…",    self._on_save_as) 
 
         self._edit_menu = menubar.addMenu("Edit")
-        self._edit_menu.addAction("Undo")   # stubs — wired later
-        self._edit_menu.addAction("Redo")
+       # self._edit_menu.addAction("Undo")   # stubs  wired later 
+        #self._edit_menu.addAction("Redo")
 
         window_menu = menubar.addMenu("Window")
 
@@ -280,6 +281,34 @@ class MainWindow(QMainWindow):
         self._dirty = False   # project is now in sync with disk
         self.statusBar().showMessage("Project saved.", 3000)
 
+    def _on_save_as(self):                                                      #BOOOOOM
+        """Save a copy of the project under a new name and/or location."""      #BOOOOOM
+        if self.project_vm.project is None:                                     #BOOOOOM
+            self._show_error("No project loaded.")                             #BOOOOOM
+            return     
+        # Ask for a new name first; pre-fill with the current name              #BOOOOOM
+        new_name, ok = QInputDialog.getText(                                    #BOOOOOM
+            self, "Save As — Project Name",                                   #BOOOOOM
+            "New project name:",                                                 #BOOOOOM
+            text=self.project_vm.project.name,                                  #BOOOOOM
+        )                                                                        #BOOOOOM
+        if not ok or not new_name.strip():                                      #BOOOOOM
+            return                                                               #BOOOOOM
+ 
+        # Then ask for the parent folder                                         #BOOOOOM
+        folder = QFileDialog.getExistingDirectory(                              #BOOOOOM
+            self, "Save As — Choose parent folder"                              #BOOOOOM
+        )                                                                       #BOOOOOM
+        if not folder:                                                           #BOOOOOM
+            return                                                               #BOOOOOM
+ 
+        success = self.project_vm.save_as(folder, new_name)                    #BOOOOOM
+        if success:                                                             #BOOOOOM
+            self._dirty = False                                                 #BOOOOOM
+            self.statusBar().showMessage(                                       #BOOOOOM
+                f"Project saved as '{new_name}'.", 3000                        #BOOOOOM
+            )
+
     def _mark_dirty(self):
         """Called whenever the network or project changes — flags unsaved work."""
         if self.project_vm.project is not None:
@@ -308,22 +337,7 @@ class MainWindow(QMainWindow):
             self.network_vm.add_layer(layer_type)
 
 
-    def _on_toggle_connect_mode(self) -> None:                              #added for appa
-        """
-        Toggles the canvas between normal (scroll/select) and connect mode.
-        The button is checkable so it stays visually depressed while active.
-        """                                                                  #added for appa
-        active = self.btn_connect.isChecked()                               #added for appa
-        self.canvas.set_connect_mode(active)                                #added for appa
-        if active:                                                           #added for appa
-            self.btn_connect.setStyleSheet(self._CONNECT_STYLE_ON)          #added for appa
-            self.statusBar().showMessage(                                    #added for appa
-                "Connect mode ON — click a source node, then click a target node.  "  #added for appa
-                "Esc to cancel selection · click Connect again to exit.", 0  #added for appa
-            )                                                                #added for appa
-        else:                                                                #added for appa
-            self.btn_connect.setStyleSheet(self._CONNECT_STYLE_OFF)         #added for appa
-            self.statusBar().showMessage("Connect mode OFF.", 2000)
+    
 
     def _on_delete_selected(self):
         """Deletes selected layer or connection with confirmation."""
@@ -401,7 +415,23 @@ class MainWindow(QMainWindow):
             self._refresh_code_tab()
         self.results_dock.setVisible(index != 2) # hide results dock when inference tab is selected, since it won't be relevant and takes up space;WAY TOO MUCH AND TEH INFERENC ELOOKS SO SQUEEZED AND it's becuase of my small screen but still i hate how it looks
 
-
+    def _on_toggle_connect_mode(self) -> None:                              #BOOOOOM
+        """
+        Toggles the canvas between normal (scroll/select) and connect mode.
+        The button is checkable so it stays visually depressed while active.
+        """                                                                  #BOOOOOM
+        active = self.btn_connect.isChecked()                               #BOOOOOM
+        self.canvas.set_connect_mode(active)                                #BOOOOOM
+        if active:                                                           #BOOOOOM
+            self.btn_connect.setStyleSheet(self._CONNECT_STYLE_ON)          #BOOOOOM
+            self.statusBar().showMessage(                                    #BOOOOOM
+                "Connect mode ON — click a source node, then click a target node.  "  #BOOOOOM
+                "Esc to cancel selection · click Connect again to exit.", 0  #BOOOOOM
+            )                                                                #BOOOOOM
+        else:                                                                #BOOOOOM
+            self.btn_connect.setStyleSheet(self._CONNECT_STYLE_OFF)         #BOOOOOM
+            self.statusBar().showMessage("Connect mode OFF.", 2000)          #BOOOOOM
+ 
     # ── training lifecycle ────────────────────────────────────────────────────
 
     def _on_training_started(self):
