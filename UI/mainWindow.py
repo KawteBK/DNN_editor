@@ -330,6 +330,7 @@ class MainWindow(QMainWindow):
         """Refresh code tab when selected."""
         if index == 1:  # Code tab index
             self._refresh_code_tab()
+        self.results_dock.setVisible(index != 2) # hide results dock when inference tab is selected, since it won't be relevant and takes up space;WAY TOO MUCH AND TEH INFERENC ELOOKS SO SQUEEZED AND it's becuase of my small screen but still i hate how it looks
 
 
     # ── training lifecycle ────────────────────────────────────────────────────
@@ -580,6 +581,3 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
-
-
-    
