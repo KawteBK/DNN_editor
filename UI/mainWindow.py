@@ -10,7 +10,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))     # -> ai_edito
 
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QPushButton,
-    QTabWidget, QLabel, QFileDialog, QMessageBox, QInputDialog
+    QTabWidget, QLabel, QFileDialog, QMessageBox, QInputDialog,
+    QStackedWidget,                          # added this for aang
 )
 from PyQt6.QtCore import Qt, QTimer
 from tabs.network_tab import NetworkTab
@@ -21,6 +22,7 @@ from docks.layer_config_dock import LayerConfigDock
 from docks.network_config_dock import NetworkConfigDock
 from docks.dataset_dock import DatasetDock
 from docks.results_dock import ResultsDock
+from docks.welcome_screen import WelcomeScreen  # added this for aang
 
 from ViewModel.project_vm import ProjectVM
 from ViewModel.network_vm import NetworkVM
@@ -108,19 +110,30 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Ready")
 
         # ── tabs ──────────────────────────────────────────────────────────────
-        tabs = QTabWidget()
+        # added this for aang — tabs live inside a QStackedWidget so the
+        # welcome screen (page 0) can replace them when no project is open
+        self._central_stack = QStackedWidget()  # added this for aang
+
+        self._welcome = WelcomeScreen()  # added this for aang
+        self._welcome.new_project_requested.connect(self._on_new)   # added this for aang
+        self._welcome.open_project_requested.connect(self._on_open) # added this for aang
+
+        self.tabs = QTabWidget()
         self.canvas   = NetworkTab(self.network_vm)
         self.code_tab = CodeTab()
         self.inference_tab = OngletInference(self.project_vm)
-        tabs.addTab(self.canvas, "Network")
-        tabs.addTab(self.code_tab, "Code")
-        tabs.addTab(self.inference_tab, "Inference")
-        self.setCentralWidget(tabs)
+        self.tabs.addTab(self.canvas, "Network")
+        self.tabs.addTab(self.code_tab, "Code")
+        self.tabs.addTab(self.inference_tab, "Inference")
+
+        self._central_stack.addWidget(self._welcome)  # added this for aang — page 0
+        self._central_stack.addWidget(self.tabs)      # added this for aang — page 1
+        self.setCentralWidget(self._central_stack)
 
 
         #style for teh tabs! sorry you were too ugly
 
-        tabs.setStyleSheet("""
+        self.tabs.setStyleSheet("""  # added this for aang
     QTabBar::tab {
         font-size: 13px;
         font-weight: bold;
@@ -194,8 +207,7 @@ class MainWindow(QMainWindow):
 
         # Network changes → regenerate code tab
         self.network_vm.network_changed.connect(self._refresh_code_tab)
-        tabs.currentChanged.connect(self._on_tab_changed)
-        self.setCentralWidget(tabs)
+        self.tabs.currentChanged.connect(self._on_tab_changed)  # added this for aang
 
         # ── start with a empty project ────────────────────────────────────────
         self.project_vm._project = None 
@@ -473,6 +485,12 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("No project loaded. Create or open a project to begin.")
         self.setWindowTitle("DNN Editor")
 
+        # added this for aang — flip to welcome screen and hide all docks
+        self._central_stack.setCurrentWidget(self._welcome)
+        for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
+                     self.network_config_dock, self.results_dock]:
+            dock.hide()
+
 
 
     def _update_ui_for_project(self, project):
@@ -486,6 +504,12 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle(f"DNN Editor — {project.name}")
         self.statusBar().showMessage(f"Loaded project: {project.name}", 3000)
+
+        # added this for aang — flip back to the tabs and restore all docks
+        self._central_stack.setCurrentWidget(self.tabs)
+        for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
+                     self.network_config_dock, self.results_dock]:
+            dock.show()
 
 
     def _update_train_button_state(self): 
@@ -556,3 +580,6 @@ if __name__ == "__main__":
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
+
+
+    

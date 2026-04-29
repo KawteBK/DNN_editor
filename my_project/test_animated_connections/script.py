@@ -13,6 +13,7 @@ import torch.optim as optim
 from torch.utils.data import DataLoader, random_split
 from torchvision import datasets, transforms
 
+from sklearn.metrics import f1_score, precision_score, recall_score
 
 
     class Model(nn.Module):
@@ -78,6 +79,7 @@ def evaluate(model, loader, criterion, device) -> dict:
     running_loss = 0.0
     correct = 0
     total = 0
+    all_preds, all_labels = [], []
 
     with torch.no_grad():
         for inputs, labels in loader:
@@ -88,9 +90,12 @@ def evaluate(model, loader, criterion, device) -> dict:
             _, predicted = outputs.max(1)
             total   += labels.size(0)
             correct += predicted.eq(labels).sum().item()
+        all_preds.extend(predicted.cpu().numpy())
+        all_labels.extend(labels.cpu().numpy())
 
     results = {"loss": running_loss / total}
-    results["accuracy"] = 100.0 * correct / total
+    results["precision"] = precision_score(all_labels, all_preds, average="macro", zero_division=0)
+    results["recall"] = recall_score(all_labels, all_preds, average="macro", zero_division=0)
     return results
 
 
@@ -102,9 +107,6 @@ if __name__ == "__main__":
     model     = Model().to(device)
     optimizer, criterion = build_optimizer_and_loss(model)
 
-    best_val_loss = float('inf')
-    patience_counter = 0
-    patience = 5
     for epoch in range(10):
         train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
         log = f"Epoch {epoch + 1:>3}/{10}  train_loss={train_loss:.4f}"
@@ -114,16 +116,6 @@ if __name__ == "__main__":
             metrics_str = "  ".join(f"val_{k}={v:.4f}" for k, v in val_metrics.items())
             log += f"  {metrics_str}"
 
-        # Early stopping — stop if val loss doesn't improve for 5 epochs
-        if val_loader and val_metrics["loss"] < best_val_loss:
-            best_val_loss = val_metrics["loss"]
-            patience_counter = 0
-            torch.save(model.state_dict(), "best_weights.pt")
-        elif val_loader:
-            patience_counter += 1
-            if patience_counter >= patience:
-                print(f"Early stopping triggered at epoch {epoch + 1}")
-                break
         print(log)
 
     torch.save(model.state_dict(), "weights.pt")
