@@ -1,5 +1,5 @@
 import os
-from PyQt6.QtCore import QObject, pyqtSignal
+from PyQt6.QtCore import QObject, pyqtSignal, QTimer
 
 from Core.project import Project
 from Core.projectManager import ProjectManager
@@ -29,6 +29,12 @@ class ProjectVM(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self._project: Project | None = None
+        self._has_been_saved_once: bool = False
+
+        # Autosave every 5 minutes — only starts after the first explicit save
+        self._autosave_timer = QTimer(self)
+        self._autosave_timer.setInterval(5 * 60 * 1000)  # 5 minutes in ms
+        self._autosave_timer.timeout.connect(self._autosave)
 
     # ── public API ────────────────────────────────────────────────────────────
 
@@ -91,8 +97,21 @@ class ProjectVM(QObject):
             return
         try:
             ProjectManager.save(self._project)
+            # Start autosave timer on first explicit save by the user
+            if not self._has_been_saved_once:
+                self._has_been_saved_once = True
+                self._autosave_timer.start()
         except Exception as e:
             self.error_occurred.emit(f"Save failed: {e}")
+
+    def _autosave(self) -> None:
+        """Triggered every 5 minutes after the first explicit save."""
+        if self._project is None:
+            return
+        try:
+            ProjectManager.save(self._project)
+        except Exception:
+            pass  # autosave is silent — never nag the user
 
     def save_as(self, new_folder: str, new_name: str) -> bool:                  #added for appa
         """
@@ -117,6 +136,10 @@ class ProjectVM(QObject):
             self._project.name = new_name.strip()                              #added for appa
 
             ProjectManager.save(self._project)                                  #added for appa
+            # Start autosave timer on first explicit save (save_as counts)      #added for appa
+            if not self._has_been_saved_once:                                   #added for appa
+                self._has_been_saved_once = True                                #added for appa
+                self._autosave_timer.start()                                    #added for appa
             # Fire project_changed so the window title and dirty flag refresh   #added for appa
             self.project_changed.emit(self._project)                            #added for appa
             return True                                                          #added for appa

@@ -40,7 +40,7 @@ from ViewModel.training_vm import TrainingVM
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("DNN Editor")
+        self.setWindowTitle("NeuroCraft")
         self.setMinimumSize(1200, 800)
         self.showMaximized()
 
@@ -82,62 +82,135 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         toolbar.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
 
-        self.btn_stop  = QPushButton("Stop")
-        self.btn_train = QPushButton("Train")
-        btn_delete     = QPushButton("Delete")
-        btn_add        = QPushButton("Add")
-        self.btn_connect = QPushButton("Connect") 
+        # ── shared button style (matches Connect button, more rounded) ────────
+        # All buttons share this base; each overrides only background/border color.
+        _BTN_BASE = (
+            "QPushButton {{"
+            "  background-color: {bg};"
+            "  color: {fg};"
+            "  padding: 5px 16px;"
+            "  border: 1px solid {border};"
+            "  border-radius: 8px;"
+            "  font-weight: bold;"
+            "  font-size: 13px;"
+            "}}"
+            "QPushButton:hover {{ background-color: {hover}; }}"
+            "QPushButton:disabled {{ background-color: #333; color: #666; border-color: #444; }}"
+        )
+
+        def _btn_style(bg, fg, border, hover):
+            return _BTN_BASE.format(bg=bg, fg=fg, border=border, hover=hover)
+
+        # ── NeuroCraft branding label in toolbar (fix 12) ─────────────────────
+        brand_label = QLabel("NeuroCraft")
+        brand_label.setStyleSheet(
+            "QLabel {"
+            "  color: #4FC3F7;"
+            "  font-family: Consolas, 'Courier New', monospace;"
+            "  font-size: 16px;"
+            "  font-weight: bold;"
+            "  padding: 0px 12px;"
+            "  letter-spacing: 1px;"
+            "}"
+        )
+
+        # ── buttons ───────────────────────────────────────────────────────────
+        self.btn_stop    = QPushButton("  Stop")
+        self.btn_train   = QPushButton("  Train")
+        self.btn_delete  = QPushButton("  Delete")
+        self.btn_add     = QPushButton("  Add")
+        self.btn_connect = QPushButton("  Connect")
         self.btn_connect.setCheckable(True)
 
-        self.btn_connect.setToolTip(                       #added for appa
-            "Connect mode: click-drag from one node to another to link them.\n"  #added for appa
-            "Right-click drag always works too."           #added for appa
-        )                                                  #added for appa
- 
+        # Try to load qtawesome icons; fall back to unicode if not installed
+        try:
+            import qtawesome as qta
+            self.btn_train.setIcon(qta.icon("fa5s.play",        color="#ffffff"))
+            self.btn_stop.setIcon( qta.icon("fa5s.stop",        color="#ffffff"))
+            self.btn_delete.setIcon(qta.icon("fa5s.trash-alt",  color="#ffffff"))
+            self.btn_add.setIcon(  qta.icon("fa5s.plus",        color="#ffffff"))
+            self.btn_connect.setIcon(qta.icon("fa5s.link",      color="#7ecfda"))
+        except Exception:
+            # Fallback: prepend unicode symbols
+            self.btn_train.setText("▶  Train")
+            self.btn_stop.setText("■  Stop")
+            self.btn_delete.setText("X Delete")
+            self.btn_add.setText("＋  Add")
+            self.btn_connect.setText("⛓  Connect")
 
-        btn_add.clicked.connect(self._on_add_layer)
-        btn_delete.clicked.connect(self._on_delete_selected)
-        self.btn_connect.clicked.connect(self._on_toggle_connect_mode) 
+        # ── per-button styles (fix 14 & 15) ──────────────────────────────────
+        self.btn_train.setStyleSheet(
+            _btn_style(bg="#1a5e35", fg="#ffffff", border="#27ae60", hover="#1e7a42"))
+        self.btn_stop.setStyleSheet(
+            _btn_style(bg="#5e1a1a", fg="#ffffff", border="#c0392b", hover="#7a1e1e"))
+        self.btn_delete.setStyleSheet(
+            _btn_style(bg="#5e1a1a", fg="#ffffff", border="#c0392b", hover="#7a1e1e"))
+        self.btn_add.setStyleSheet(
+            _btn_style(bg="#1a3e5e", fg="#ffffff", border="#2980b9", hover="#1e5080"))
+
+        self._CONNECT_STYLE_OFF = (
+            "QPushButton {"
+            "  background-color: #1e4a52; color: #7ecfda;"
+            "  padding: 5px 10px; border: 1px solid #2a8a99;"
+            "  border-radius: 8px; font-weight: bold; font-size: 13px;"
+            "}"
+            "QPushButton:hover { background-color: #26626e; }"
+            "QPushButton:disabled { background-color: #333; color: #666; border-color: #444; }"
+        )
+        self._CONNECT_STYLE_ON = (
+            "QPushButton {"
+            "  background-color: #00bcd4; color: #ffffff;"
+            "  padding: 5px 10px; border: 2px solid #00e5ff;"
+            "  border-radius: 8px; font-weight: bold; font-size: 13px;"
+            "}"
+            "QPushButton:hover { background-color: #00acc1; }"
+        )
+        self.btn_connect.setStyleSheet(self._CONNECT_STYLE_OFF)
+
+        self.btn_connect.setToolTip(
+            "Connect mode: click-drag from one node to another to link them.\n"
+            "Right-click drag always works too."
+        )
+
+        # ── wire signals ──────────────────────────────────────────────────────
+        self.btn_add.clicked.connect(self._on_add_layer)
+        self.btn_delete.clicked.connect(self._on_delete_selected)
+        self.btn_connect.clicked.connect(self._on_toggle_connect_mode)
         self.btn_train.clicked.connect(self._on_train)
         self.btn_stop.clicked.connect(self._on_stop)
-        
-         
 
-        self.btn_train.setStyleSheet(
-            "background-color: #28a" \
-            "745; color: white; padding: 5px 15px;"
-        )
-        self.btn_stop.setStyleSheet(
-            "background-color: #dc3545; color: white; padding: 5px 15px;"
-        )
         self.btn_stop.setEnabled(False)   # only active while training
 
-        self._CONNECT_STYLE_OFF = (                                          #added for appa
-            "QPushButton { background-color: #1e4a52; color: #7ecfda;"      #added for appa
-            " padding: 5px 15px; border: 1px solid #2a8a99; }"              #added for appa
-            "QPushButton:hover { background-color: #26626e; }"              #added for appa
-        )         
-        self._CONNECT_STYLE_ON = (                                           #added for appa
-            "QPushButton { background-color: #00bcd4; color: #ffffff;"      #added for appa
-            " padding: 5px 15px; border: 2px solid #00e5ff;"                #added for appa
-            " font-weight: bold; }"                                          #added for appa
-            "QPushButton:hover { background-color: #00acc1; }"              #added for appa
-        )                                                                    #added for appa
-        self.btn_connect.setStyleSheet(self._CONNECT_STYLE_OFF) 
+        # ── keep references for show/hide (fix 13) ───────────────────────────
+        # These are the widgets that should be invisible on the welcome screen.
+        self._project_toolbar_widgets = [
+            self.btn_stop, self.btn_train, self.btn_delete,
+            self.btn_add, self.btn_connect,
+        ]
 
-        
-
+        # ── add to toolbar (RightToLeft layout: last added = rightmost) ──────
         toolbar.addWidget(self.btn_stop)
         toolbar.addWidget(self.btn_train)
         toolbar.addSeparator()
-        toolbar.addWidget(btn_delete)
-        toolbar.addWidget(btn_add)
-        toolbar.addWidget(self.btn_connect) 
+        toolbar.addWidget(self.btn_delete)
+        toolbar.addWidget(self.btn_add)
+        toolbar.addWidget(self.btn_connect)
         toolbar.addSeparator()
-
 
         self.training_time_label = QLabel("Training Time: --")
         toolbar.addWidget(self.training_time_label)
+
+        # Brand label goes on the LEFT — toolbar is RightToLeft so addWidget
+        # pushes it to the far left.  We use a spacer widget to pin it.
+        from PyQt6.QtWidgets import QWidget as _QWidget
+        spacer = _QWidget(); spacer.setSizePolicy(
+            spacer.sizePolicy().horizontalPolicy(),  # type: ignore[arg-type]
+            spacer.sizePolicy().verticalPolicy(),
+        )
+        from PyQt6.QtWidgets import QSizePolicy
+        spacer.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        toolbar.addWidget(spacer)
+        toolbar.addWidget(brand_label)
 
         # Timer to update the training time label every second
         self._timer = QTimer(self)
@@ -393,7 +466,7 @@ class MainWindow(QMainWindow):
 
         self._update_ui_for_project(project) #updating the canvas with the new no canva ui
 
-        self.setWindowTitle(f"DNN Editor — {project.name}")
+        self.setWindowTitle(f"NeuroCraft — {project.name}")
         self.canvas.clear_canvas()
         self.network_vm.set_network(project.network)
         self.dataset_dock.load_from_project(project)
@@ -456,9 +529,8 @@ class MainWindow(QMainWindow):
         self.dataset_dock.setEnabled(False)
     
         # Disable add/delete buttons in toolbar
-        for action in self.findChildren(QPushButton):
-            if action.text() in ["Add", "Delete"]:
-                action.setEnabled(False)
+        self.btn_add.setEnabled(False)
+        self.btn_delete.setEnabled(False)
     
         # Disable File menu actions that modify state
         for action in self._file_menu.actions():
@@ -479,9 +551,8 @@ class MainWindow(QMainWindow):
         self.network_config_dock.setEnabled(True)
         self.dataset_dock.setEnabled(True)
     
-        for action in self.findChildren(QPushButton):
-            if action.text() in ["Add", "Delete"]:
-                action.setEnabled(True)
+        self.btn_add.setEnabled(True)
+        self.btn_delete.setEnabled(True)
     
         for action in self._file_menu.actions():
             if action.text() in ["New project", "Open"]:
@@ -572,13 +643,16 @@ class MainWindow(QMainWindow):
 
         self.results_dock.clear()
         self.statusBar().showMessage("No project loaded. Create or open a project to begin.")
-        self.setWindowTitle("DNN Editor")
+        self.setWindowTitle("NeuroCraft")
 
         # added this for aang — flip to welcome screen and hide all docks
         self._central_stack.setCurrentWidget(self._welcome)
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.hide()
+        # fix 13 — hide project buttons on welcome screen
+        for w in self._project_toolbar_widgets:
+            w.setVisible(False)
 
 
 
@@ -591,7 +665,7 @@ class MainWindow(QMainWindow):
             for action in menu.actions():
                 action.setEnabled(True)
 
-        self.setWindowTitle(f"DNN Editor — {project.name}")
+        self.setWindowTitle(f"NeuroCraft — {project.name}")
         self.statusBar().showMessage(f"Loaded project: {project.name}", 3000)
 
         # added this for aang — flip back to the tabs and restore all docks
@@ -599,6 +673,9 @@ class MainWindow(QMainWindow):
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.show()
+        # fix 13 — restore project buttons when project is active
+        for w in self._project_toolbar_widgets:
+            w.setVisible(True)
 
 
     def _update_train_button_state(self): 
