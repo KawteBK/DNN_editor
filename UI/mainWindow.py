@@ -1,8 +1,11 @@
-import sys
 try:
-    import winsound
-except:
+    import winsound  # Windows-only for beeps
+except :
     pass
+
+
+
+import sys
 from PyQt6.QtMultimedia import QSoundEffect
 from PyQt6.QtCore import QUrl
 import os
@@ -45,6 +48,11 @@ class MainWindow(QMainWindow):
         self.network_vm  = NetworkVM(self)
         self.training_vm = TrainingVM(self)
 
+        # Tracks whether there are unsaved changes.
+        # True  → quit dialog shows "save before exiting?"
+        # False → close immediately (nothing to lose)
+        self._dirty = False
+
         # ── menu bar ──────────────────────────────────────────────────────────
         menubar = self.menuBar()
 
@@ -76,13 +84,13 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         toolbar.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
 
-        self.btn_stop   = QPushButton("Stop")
-        self.btn_train  = QPushButton("Train")
-        self.btn_delete = QPushButton("Delete")
-        self.btn_add    = QPushButton("Add")
+        self.btn_stop  = QPushButton("Stop")
+        self.btn_train = QPushButton("Train")
+        btn_delete     = QPushButton("Delete")
+        btn_add        = QPushButton("Add")
 
-        self.btn_add.clicked.connect(self._on_add_layer)
-        self.btn_delete.clicked.connect(self._on_delete_selected)
+        btn_add.clicked.connect(self._on_add_layer)
+        btn_delete.clicked.connect(self._on_delete_selected)
 
         self.btn_train.setStyleSheet(
             "background-color: #28a745; color: white; padding: 5px 15px;"
@@ -98,8 +106,8 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.btn_stop)
         toolbar.addWidget(self.btn_train)
         toolbar.addSeparator()
-        toolbar.addWidget(self.btn_delete)
-        toolbar.addWidget(self.btn_add)
+        toolbar.addWidget(btn_delete)
+        toolbar.addWidget(btn_add)
         toolbar.addSeparator()
 
         self.training_time_label = QLabel("Training Time: --")
@@ -204,6 +212,7 @@ class MainWindow(QMainWindow):
 
         # Training lifecycle → UI state
         self.training_vm.training_started.connect(self._on_training_started)
+        self.training_vm.training_started.connect(self.results_dock.clear)  # clear results on every new run
         self.training_vm.training_stopped.connect(self._on_training_stopped)
         self.training_vm.training_finished.connect(self._on_training_finished)
         self.training_vm.training_failed.connect(self._show_error)
@@ -211,6 +220,8 @@ class MainWindow(QMainWindow):
 
         # Network changes → regenerate code tab
         self.network_vm.network_changed.connect(self._refresh_code_tab)
+        self.network_vm.network_changed.connect(self._mark_dirty)   # unsaved changes
+        self.project_vm.project_changed.connect(self._mark_dirty)   # new/loaded project starts dirty
         self.tabs.currentChanged.connect(self._on_tab_changed)  # added this for aang
 
         # ── start with a empty project ────────────────────────────────────────
@@ -238,7 +249,13 @@ class MainWindow(QMainWindow):
 
     def _on_save(self):
         self.project_vm.save()
+        self._dirty = False   # project is now in sync with disk
         self.statusBar().showMessage("Project saved.", 3000)
+
+    def _mark_dirty(self):
+        """Called whenever the network or project changes — flags unsaved work."""
+        if self.project_vm.project is not None:
+            self._dirty = True
 
     def _on_train(self):
         if self.project_vm.project is None:
@@ -324,6 +341,9 @@ class MainWindow(QMainWindow):
         self.network_config_dock.load_from_project(project)
         self.results_dock.clear()
         self.code_tab.clear()
+
+        # Project just came from disk — nothing is unsaved yet
+        self._dirty = False
 
         if project.dataset and project.networkConfig:
           self._refresh_code_tab()
@@ -495,10 +515,6 @@ class MainWindow(QMainWindow):
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.hide()
-        # hide toolbar buttons that make no sense on the welcome screen
-        for w in [self.btn_train, self.btn_stop, self.btn_add,
-                  self.btn_delete, self.training_time_label]:
-            w.hide()
 
 
 
@@ -519,10 +535,6 @@ class MainWindow(QMainWindow):
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.show()
-        # restore toolbar buttons
-        for w in [self.btn_train, self.btn_stop, self.btn_add,
-                  self.btn_delete, self.training_time_label]:
-            w.show()
 
 
     def _update_train_button_state(self): 
@@ -563,6 +575,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Show confirmation dialog before quitting."""
+        # 1. If training is running, always warn regardless of dirty state
         if self.training_vm.is_training:
             reply = QMessageBox.question(
                 self, "Training in Progress",
@@ -572,19 +585,20 @@ class MainWindow(QMainWindow):
             if reply != QMessageBox.StandardButton.Yes:
                 event.ignore()
                 return
-    
-        if self.project_vm.project:
+
+        # 2. Only ask about saving if there are actual unsaved changes
+        if self._dirty and self.project_vm.project is not None:
             reply = QMessageBox.question(
-                self, "Exit",
-                "Do you want to save before exiting?",
+                self, "Unsaved Changes",
+                "You have unsaved changes.\nSave before exiting?",
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No | QMessageBox.StandardButton.Cancel
             )
             if reply == QMessageBox.StandardButton.Yes:
-                self._on_save()
+                self._on_save()   # _on_save() also sets _dirty = False
             elif reply == QMessageBox.StandardButton.Cancel:
                 event.ignore()
                 return
-    
+
         event.accept()
 
         
