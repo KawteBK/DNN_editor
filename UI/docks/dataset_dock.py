@@ -1,8 +1,7 @@
 from PyQt6.QtWidgets import (
     QDockWidget, QWidget, QVBoxLayout, QLabel, QComboBox, QPushButton
 )
-from matplotlib.pylab import info
-
+from PyQt6.QtCore import QTimer
 from Core.dataset import BuiltinDataset
 
 

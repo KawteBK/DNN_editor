@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
-from PyQt6.QtGui import QBrush, QPen, QColor, QFont
+from PyQt6.QtGui import QBrush, QPen, QColor, QFont, QPainter, QPainterPath
 from PyQt6.QtCore import Qt, QRectF
 
 
@@ -85,7 +85,7 @@ class NodeItem(QGraphicsRectItem):
             # Keep type_label as "Activation", update name label to show function
             self.label.setPlainText(act_type)
 
-    # ── movement → update connections ────────────────────────────────────────
+    # ── movement -> update connections ────────────────────────────────────────
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
@@ -96,11 +96,36 @@ class NodeItem(QGraphicsRectItem):
     # ── paint: rounded rect only — Qt draws children automatically ───────────
 
     def paint(self, painter, option, widget=None):
-        """Draw rounded rectangle background. Children (labels) are drawn by Qt."""
-        painter.setBrush(self.brush())
-        painter.setPen(self.pen())
-        painter.drawRoundedRect(
-            QRectF(0, 0, self.rect().width(), self.rect().height()),
-            10, 10
-        )
-        # Do NOT call child.paint() manually — Qt handles children after this returns.
+        """Custom paint with selection glow + clean border"""
+
+        rect = QRectF(0, 0, self.rect().width(), self.rect().height())
+
+        # Get layer colors
+        fill_color, border_color = LAYER_COLORS.get(self.layer_type, DEFAULT_COLOR)
+
+        base_color = QColor(fill_color)
+        border_qcolor = QColor(border_color)
+
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        # ── 1. Glow effect when selected ─────────────────────────────
+        # if self.isSelected():
+        #     glow_color = QColor(fill_color)
+        #     glow_color.setAlpha(80)  # transparency
+
+        #     for i in range(3):  # 3 layers of glow
+        #         pen = QPen(glow_color, 6 + i * 2)
+        #         painter.setPen(pen)
+        #         painter.setBrush(Qt.BrushStyle.NoBrush)
+        #         painter.drawRoundedRect(rect, 10, 10)
+
+        # ── 2. Main rectangle ────────────────────────────────────────
+        painter.setBrush(QBrush(base_color))
+
+        if self.isSelected():
+            # Bright selection border
+            painter.setPen(QPen(QColor("#9ED3FFFF"), 3))
+        else:
+            painter.setPen(QPen(border_qcolor, 2))
+
+        painter.drawRoundedRect(rect, 10, 10)
