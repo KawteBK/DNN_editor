@@ -147,6 +147,48 @@ class PyTorchDatasets:
             raise ValueError(f"Unsupported built-in dataset: {builtinType}")
 
     @staticmethod
+    def _load_builtin_test(
+        builtinType: BuiltinDataset,
+        transform: transforms.Compose,
+        dataRoot: str,
+    ):
+        """
+        added this for aang — loads the official held-out TEST split for each dataset.
+
+        This is completely separate from the training data that _load_builtin returns.
+        The model never sees these samples during training, so evaluation scores are honest.
+
+        SVHN and STL10 use split="test" instead of train=False — same asymmetry as
+        their training counterparts.
+        """
+        os.makedirs(dataRoot, exist_ok=True)
+        kwargs = dict(root=dataRoot, download=True, transform=transform)
+
+        if builtinType == BuiltinDataset.MNIST:
+            return datasets.MNIST(**kwargs, train=False)  # added this for aang
+
+        elif builtinType == BuiltinDataset.FASHION_MNIST:
+            return datasets.FashionMNIST(**kwargs, train=False)  # added this for aang
+
+        elif builtinType == BuiltinDataset.KMNIST:
+            return datasets.KMNIST(**kwargs, train=False)  # added this for aang
+
+        elif builtinType == BuiltinDataset.CIFAR10:
+            return datasets.CIFAR10(**kwargs, train=False)  # added this for aang
+
+        elif builtinType == BuiltinDataset.CIFAR100:
+            return datasets.CIFAR100(**kwargs, train=False)  # added this for aang
+
+        elif builtinType == BuiltinDataset.SVHN:
+            return datasets.SVHN(**kwargs, split="test")  # added this for aang
+
+        elif builtinType == BuiltinDataset.STL10:
+            return datasets.STL10(**kwargs, split="test")  # added this for aang
+
+        else:
+            raise ValueError(f"Unsupported built-in dataset: {builtinType}")
+
+    @staticmethod
     def _split_dataset(full_dataset, validationSplit: float, shuffle: bool):
         """
         Splits a full dataset into train and validation subsets.

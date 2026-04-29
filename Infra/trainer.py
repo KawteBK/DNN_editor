@@ -114,31 +114,40 @@ class PyTorchTrainer:
             model.load_state_dict(best_weights)
 
         # ── final test-set evaluation ─────────────────────────────────────────
+           # added this for aang — use the real held-out test split that torchvision
+        # provides (train=False), not a random slice of the training data.
+        # Previously this reloaded train=True and carved 10% off it, meaning the
+        # model had seen every "test" sample during training — evaluation was meaningless.
         try:
-            from torch.utils.data import DataLoader, random_split as _random_split
-
+            from torch.utils.data import DataLoader  # added this for aang — random_split no longer needed here
+ 
             _data_root = os.path.join(os.path.expanduser("~"), ".cache", "nndl", "datasets")
             _transform = PyTorchDatasets._get_transforms(project.dataset._builtinType)
-            _full      = PyTorchDatasets._load_builtin(
+            # added this for aang — _load_builtin_test loads train=False (or split="test")
+            # giving a completely separate set the model never touched
+            _test_set  = PyTorchDatasets._load_builtin_test(
                 project.dataset._builtinType, _transform, _data_root
             )
-            _test_size  = max(1, int(len(_full) * 0.10))
-            _rest_size  = len(_full) - _test_size
-            _gen        = torch.Generator().manual_seed(42)
-            _, _test_set = _random_split(_full, [_rest_size, _test_size], generator=_gen)
             _test_loader = DataLoader(
                 _test_set, batch_size=tc._batchSize,
                 shuffle=False, num_workers=2, pin_memory=True,
             )
             from Core.networkConfig import MetricType as _MT
+            # added this for aang — use nc._metric (user's checked boxes) not list(_MT)
             _test_metrics = PyTorchTrainer._evaluate(
-                model, _test_loader, criterion, device, list(_MT)
+                model, _test_loader, criterion, device, nc._metric
             )
-            history["test_loss"]      = round(_test_metrics.get("loss",      0.0), 6)
-            history["test_accuracy"]  = round(_test_metrics.get("accuracy",  0.0), 4)
-            history["test_f1_score"]  = round(_test_metrics.get("f1_score",  0.0), 4)
-            history["test_precision"] = round(_test_metrics.get("precision", 0.0), 4)
-            history["test_recall"]    = round(_test_metrics.get("recall",    0.0), 4)
+            # loss and accuracy are always written
+            history["test_loss"]     = round(_test_metrics.get("loss",     0.0), 6)
+            history["test_accuracy"] = round(_test_metrics.get("accuracy", 0.0), 4)
+            # added this for aang — only write optional keys when user checked them;
+            # absence of the key hides the card in results_dock
+            if _MT.F1_SCORE in nc._metric:
+                history["test_f1_score"]  = round(_test_metrics.get("f1_score",  0.0), 4)
+            if _MT.PRECISION in nc._metric:
+                history["test_precision"] = round(_test_metrics.get("precision", 0.0), 4)
+            if _MT.RECALL in nc._metric:
+                history["test_recall"]    = round(_test_metrics.get("recall",    0.0), 4)
             # confusion matrix
             from sklearn.metrics import confusion_matrix as _cm_fn
             model.eval()

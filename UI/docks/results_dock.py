@@ -27,7 +27,7 @@ _CLASS_NAMES = {
 }
 
 _BG      = "#2b2b2b"
-_SURFACE = "#3c3f41"
+_SURFACE = "#393d3f"
 _CARD    = "#313438"
 _BORDER  = "#555555"
 _TEXT    = "#cccccc"
