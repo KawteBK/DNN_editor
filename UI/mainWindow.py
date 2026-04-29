@@ -85,27 +85,55 @@ class MainWindow(QMainWindow):
         self.btn_train = QPushButton("Train")
         btn_delete     = QPushButton("Delete")
         btn_add        = QPushButton("Add")
+        self.btn_connect = QPushButton("Connect") 
+        self.btn_connect.setCheckable(True)
+
+        self.btn_connect.setToolTip(                       #added for appa
+            "Connect mode: click-drag from one node to another to link them.\n"  #added for appa
+            "Right-click drag always works too."           #added for appa
+        )                                                  #added for appa
+ 
 
         btn_add.clicked.connect(self._on_add_layer)
         btn_delete.clicked.connect(self._on_delete_selected)
+        self.btn_connect.clicked.connect(self._on_toggle_connect_mode) 
+        self.btn_train.clicked.connect(self._on_train)
+        self.btn_stop.clicked.connect(self._on_stop)
+        
+         
 
         self.btn_train.setStyleSheet(
-            "background-color: #28a745; color: white; padding: 5px 15px;"
+            "background-color: #28a" \
+            "745; color: white; padding: 5px 15px;"
         )
         self.btn_stop.setStyleSheet(
             "background-color: #dc3545; color: white; padding: 5px 15px;"
         )
         self.btn_stop.setEnabled(False)   # only active while training
 
-        self.btn_train.clicked.connect(self._on_train)
-        self.btn_stop.clicked.connect(self._on_stop)
+        self._CONNECT_STYLE_OFF = (                                          #added for appa
+            "QPushButton { background-color: #1e4a52; color: #7ecfda;"      #added for appa
+            " padding: 5px 15px; border: 1px solid #2a8a99; }"              #added for appa
+            "QPushButton:hover { background-color: #26626e; }"              #added for appa
+        )         
+        self._CONNECT_STYLE_ON = (                                           #added for appa
+            "QPushButton { background-color: #00bcd4; color: #ffffff;"      #added for appa
+            " padding: 5px 15px; border: 2px solid #00e5ff;"                #added for appa
+            " font-weight: bold; }"                                          #added for appa
+            "QPushButton:hover { background-color: #00acc1; }"              #added for appa
+        )                                                                    #added for appa
+        self.btn_connect.setStyleSheet(self._CONNECT_STYLE_OFF) 
+
+        
 
         toolbar.addWidget(self.btn_stop)
         toolbar.addWidget(self.btn_train)
         toolbar.addSeparator()
         toolbar.addWidget(btn_delete)
         toolbar.addWidget(btn_add)
+        toolbar.addWidget(self.btn_connect) 
         toolbar.addSeparator()
+
 
         self.training_time_label = QLabel("Training Time: --")
         toolbar.addWidget(self.training_time_label)
@@ -279,6 +307,23 @@ class MainWindow(QMainWindow):
         if ok and layer_type:
             self.network_vm.add_layer(layer_type)
 
+
+    def _on_toggle_connect_mode(self) -> None:                              #added for appa
+        """
+        Toggles the canvas between normal (scroll/select) and connect mode.
+        The button is checkable so it stays visually depressed while active.
+        """                                                                  #added for appa
+        active = self.btn_connect.isChecked()                               #added for appa
+        self.canvas.set_connect_mode(active)                                #added for appa
+        if active:                                                           #added for appa
+            self.btn_connect.setStyleSheet(self._CONNECT_STYLE_ON)          #added for appa
+            self.statusBar().showMessage(                                    #added for appa
+                "Connect mode ON — click a source node, then click a target node.  "  #added for appa
+                "Esc to cancel selection · click Connect again to exit.", 0  #added for appa
+            )                                                                #added for appa
+        else:                                                                #added for appa
+            self.btn_connect.setStyleSheet(self._CONNECT_STYLE_OFF)         #added for appa
+            self.statusBar().showMessage("Connect mode OFF.", 2000)
 
     def _on_delete_selected(self):
         """Deletes selected layer or connection with confirmation."""

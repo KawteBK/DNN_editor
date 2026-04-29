@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
-from PyQt6.QtGui import QBrush, QPen, QColor, QFont, QPainter, QPainterPath
+from PyQt6.QtGui import QBrush, QPen, QColor, QFont
 from PyQt6.QtCore import Qt, QRectF
 
 
@@ -43,6 +43,9 @@ class NodeItem(QGraphicsRectItem):
         )
 
         fill, border = LAYER_COLORS.get(layer_type, DEFAULT_COLOR)
+        self._fill_color   = fill    #added for appa
+        self._border_color = border  #added for appa
+        self._connect_hover = False  #added for appa — True while connect mode is on and mouse is over this node
         self.setBrush(QBrush(QColor(fill)))
         self.setPen(QPen(QColor(border), 2))
 
@@ -85,7 +88,12 @@ class NodeItem(QGraphicsRectItem):
             # Keep type_label as "Activation", update name label to show function
             self.label.setPlainText(act_type)
 
-    # ── movement -> update connections ────────────────────────────────────────
+    def set_connect_hover(self, active: bool) -> None:  #added for appa
+        """Highlight this node as a valid connection target while in connect mode."""  #added for appa
+        self._connect_hover = active  #added for appa
+        self.update()                 #added for appa — trigger repaint
+
+    # ── movement → update connections ────────────────────────────────────────
 
     def itemChange(self, change, value):
         if change == QGraphicsItem.GraphicsItemChange.ItemPositionHasChanged:
@@ -96,36 +104,21 @@ class NodeItem(QGraphicsRectItem):
     # ── paint: rounded rect only — Qt draws children automatically ───────────
 
     def paint(self, painter, option, widget=None):
-        """Custom paint with selection glow + clean border"""
-
-        rect = QRectF(0, 0, self.rect().width(), self.rect().height())
-
-        # Get layer colors
-        fill_color, border_color = LAYER_COLORS.get(self.layer_type, DEFAULT_COLOR)
-
-        base_color = QColor(fill_color)
-        border_qcolor = QColor(border_color)
-
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-
-        # ── 1. Glow effect when selected ─────────────────────────────
-        # if self.isSelected():
-        #     glow_color = QColor(fill_color)
-        #     glow_color.setAlpha(80)  # transparency
-
-        #     for i in range(3):  # 3 layers of glow
-        #         pen = QPen(glow_color, 6 + i * 2)
-        #         painter.setPen(pen)
-        #         painter.setBrush(Qt.BrushStyle.NoBrush)
-        #         painter.drawRoundedRect(rect, 10, 10)
-
-        # ── 2. Main rectangle ────────────────────────────────────────
-        painter.setBrush(QBrush(base_color))
-
-        if self.isSelected():
-            # Bright selection border
-            painter.setPen(QPen(QColor("#9ED3FFFF"), 3))
+        """Draw rounded rectangle background. Children (labels) are drawn by Qt."""
+        # ── border pen: three visual states, checked in priority order ───────
+        if self._connect_hover:                                   #added for appa
+            # Bright cyan ring — "you can drop here" affordance
+            pen = QPen(QColor("#00E5FF"), 3)                      #added for appa
+        elif self.isSelected():                                    #added for appa
+            # White ring — selected state (replaces Qt's default dashed rect)
+            pen = QPen(QColor("#FFFFFF"), 3)                      #added for appa
         else:
-            painter.setPen(QPen(border_qcolor, 2))
+            pen = self.pen()   # normal border colour from LAYER_COLORS
 
-        painter.drawRoundedRect(rect, 10, 10)
+        painter.setBrush(self.brush())
+        painter.setPen(pen)                                        #modif for momo
+        painter.drawRoundedRect(
+            QRectF(0, 0, self.rect().width(), self.rect().height()),
+            10, 10
+        )
+        # Do NOT call child.paint() manually — Qt handles children after this returns.

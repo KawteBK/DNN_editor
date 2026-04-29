@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsLineItem, QMessageBox
+from PyQt6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsLineItem
 from PyQt6.QtGui import QPainter, QBrush, QColor, QPen
 from PyQt6.QtCore import Qt, QPointF
 
@@ -30,7 +30,15 @@ class CanvasView(QGraphicsView):
         # a surviving node.
         self._spawn_counter: int = 0
 
-        # ADDED: rubber-band line drawn while the user drags a new connection
+        # ── connect mode state ────────────────────────────────────────────────
+        # Two-click flow: click node A (stored in _connect_first_node, gets a
+        # cyan ring), then click node B → connection fires automatically.
+        # Right-click drag is unchanged and works regardless of mode.
+        self._connect_mode: bool = False                        #added for appa
+        self._connect_first_node: NodeItem | None = None        #added for appa — first click in two-click flow
+        self._hovered_node: NodeItem | None = None              #added for appa — node under cursor for highlight
+
+        # rubber-band line drawn while the user right-click-drags a connection
         self._pending_line: QGraphicsLineItem | None = None
         self._drag_source_node: NodeItem | None = None
 
@@ -40,6 +48,39 @@ class CanvasView(QGraphicsView):
         self.network_vm.connection_added.connect(self._on_connection_added)
         self.network_vm.connection_removed.connect(self._on_connection_removed)
         self.network_vm.network_changed.connect(self._on_network_changed)
+
+    # ── connect mode public API ───────────────────────────────────────────────
+
+    def set_connect_mode(self, active: bool) -> None:               #added for appa
+        """
+        Toggle the two-click connect mode from MainWindow's Connect button.
+        When active:
+          - First left-click on a node locks it as source (cyan ring stays on).
+          - Second left-click on any other node fires the connection.
+          - Clicking the same node again or clicking empty space resets the
+            first selection so the user can pick again.
+          - Escape (or toggling the button off) cancels everything.
+        Right-click drag still works independently regardless of mode.
+        """                                                          #added for appa
+        self._connect_mode = active                                  #added for appa
+        if active:                                                   #added for appa
+            self.setCursor(Qt.CursorShape.CrossCursor)               #added for appa
+        else:                                                        #added for appa
+            self.setCursor(Qt.CursorShape.ArrowCursor)               #added for appa
+            self._cancel_connect_selection()                         #added for appa
+
+    def _cancel_connect_selection(self) -> None:                    #added for appa
+        """Clear the first-click selection without creating a connection."""  #added for appa
+        if self._connect_first_node is not None:                    #added for appa
+            self._connect_first_node.set_connect_hover(False)       #added for appa
+            self._connect_first_node = None                         #added for appa
+
+    def _clear_hover_highlight(self) -> None:                       #added for appa
+        """Remove the transient hover ring (never clears the locked source node)."""  #added for appa
+        if self._hovered_node is not None:                          #added for appa
+            if self._hovered_node is not self._connect_first_node:  #added for appa
+                self._hovered_node.set_connect_hover(False)         #added for appa
+            self._hovered_node = None                               #added for appa
 
     # ── NetworkVM signal handlers ─────────────────────────────────────────────
 
@@ -148,71 +189,108 @@ class CanvasView(QGraphicsView):
         self._connections.clear()
         self._spawn_counter = 0   # reset so loaded projects start from cell (0,0)
 
-    # ── mouse events for drag-to-connect ─────────────────────────────────────
+    # ── mouse events ─────────────────────────────────────────────────────────
 
     def mousePressEvent(self, event) -> None:
-        # ADDED: right-click on a node starts a connection drag.
-        # Left-click is handled by Qt's built-in scroll/select drag mode.
+        # ── right-click: always starts a rubber-band drag (power-user flow) ──
         if event.button() == Qt.MouseButton.RightButton:
             scene_pos = self.mapToScene(event.pos())
             item = self.scene.itemAt(scene_pos, self.transform())
-            # Walk up to find the NodeItem (click might land on the text label child)
             while item and not isinstance(item, NodeItem):
                 item = item.parentItem()
             if isinstance(item, NodeItem):
                 self._drag_source_node = item
                 self.setDragMode(QGraphicsView.DragMode.NoDrag)
-                # Draw a rubber-band line from the node centre
                 start = item.sceneBoundingRect().center()
-                pen = QPen(QColor("#FFFFFF"), 1, Qt.PenStyle.DashLine)
+                pen = QPen(QColor("#00E5FF"), 2, Qt.PenStyle.DashLine)  #modif for momo — cyan pen
                 self._pending_line = self.scene.addLine(
                     start.x(), start.y(), start.x(), start.y(), pen
                 )
                 return
-        # ADDED: left-click selects node and tells NetworkVM.
-        # Shift+click adds to / removes from selection (multi-select).
+
+        # ── left-click in connect mode: two-click state machine ───────────────
+        elif event.button() == Qt.MouseButton.LeftButton and self._connect_mode:  #added for appa
+            scene_pos = self.mapToScene(event.pos())                              #added for appa
+            item = self.scene.itemAt(scene_pos, self.transform())                 #added for appa
+            while item and not isinstance(item, NodeItem):                        #added for appa
+                item = item.parentItem()                                           #added for appa
+
+            if self._connect_first_node is None:                                  #added for appa
+                # ── STATE 1: no source yet — lock this node as source ──────────
+                if isinstance(item, NodeItem):                                    #added for appa
+                    self._connect_first_node = item                               #added for appa
+                    item.set_connect_hover(True)   # stays lit until resolved     #added for appa
+                    # Tell MainWindow to update the status bar hint               #added for appa
+                    main = self.window()                                          #added for appa
+                    if hasattr(main, "statusBar"):                                #added for appa
+                        main.statusBar().showMessage(                             #added for appa
+                            f"Source: '{item.layer_id}' — now click the target node.  "  #added for appa
+                            "Click the same node or empty space to cancel.", 0   #added for appa
+                        )                                                         #added for appa
+                # clicking empty space while no source selected → nothing to do   #added for appa
+            else:                                                                  #added for appa
+                # ── STATE 2: source is locked — resolve the second click ────────
+                if isinstance(item, NodeItem) and item is not self._connect_first_node:  #added for appa
+                    # Valid target — fire the connection                           #added for appa
+                    self.network_vm.add_connection(                               #added for appa
+                        self._connect_first_node.layer_id, item.layer_id         #added for appa
+                    )                                                             #added for appa
+                    self._cancel_connect_selection()                              #added for appa
+                    # Status bar feedback is handled by operation_failed or       #added for appa
+                    # connection_added signals in MainWindow already.              #added for appa
+                else:                                                             #added for appa
+                    # Clicked same node or empty space → cancel selection          #added for appa
+                    self._cancel_connect_selection()                              #added for appa
+                    main = self.window()                                          #added for appa
+                    if hasattr(main, "statusBar"):                                #added for appa
+                        main.statusBar().showMessage(                             #added for appa
+                            "Selection cleared — click a source node to start again.", 3000  #added for appa
+                        )                                                         #added for appa
+            return   # don't pass to super — we own this click in connect mode    #added for appa
+
+        # ── left-click in normal mode: select node ────────────────────────────
         elif event.button() == Qt.MouseButton.LeftButton:
             scene_pos = self.mapToScene(event.pos())
             item = self.scene.itemAt(scene_pos, self.transform())
             while item and not isinstance(item, NodeItem):
                 item = item.parentItem()
-
-            shift_held = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
-
             if isinstance(item, NodeItem):
-                if shift_held:
-                    # Toggle this node in/out of the selection without
-                    # clearing the rest — don't fall through to super()
-                    # which would clear everything else.
-                    item.setSelected(not item.isSelected())
-                    self.network_vm.select_layer(item.layer_id)
-                    return
-                else:
-                    self.network_vm.select_layer(item.layer_id)
+                self.network_vm.select_layer(item.layer_id)
             else:
-                if not shift_held:
-                    self.network_vm.select_layer(None)
+                self.network_vm.select_layer(None)
 
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event) -> None:
-        # ADDED: updates the rubber-band line endpoint while dragging
+        # Only active during right-click rubber-band drag.
         if self._pending_line and self._drag_source_node:
             scene_pos = self.mapToScene(event.pos())
             line = self._pending_line.line()
             self._pending_line.setLine(line.x1(), line.y1(),
                                        scene_pos.x(), scene_pos.y())
+
+            # Highlight the node under the cursor as a drop target            #added for appa
+            item = self.scene.itemAt(scene_pos, self.transform())             #added for appa
+            while item and not isinstance(item, NodeItem):                    #added for appa
+                item = item.parentItem()                                       #added for appa
+            target = item if isinstance(item, NodeItem) else None             #added for appa
+            if target is not self._hovered_node:                              #added for appa
+                self._clear_hover_highlight()                                  #added for appa
+                if target is not None and target is not self._drag_source_node:  #added for appa
+                    target.set_connect_hover(True)                             #added for appa
+                    self._hovered_node = target                                #added for appa
             return
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event) -> None:
-        # ADDED: if released on a different node, ask NetworkVM to add a connection.
-        # NetworkVM validates it (cycle check, shape check) and emits
-        # connection_added or operation_failed accordingly.
-        if event.button() == Qt.MouseButton.RightButton and self._drag_source_node:
+        # Only right-click drag ends here — two-click connect mode is handled
+        # entirely inside mousePressEvent, no release needed.
+        if event.button() == Qt.MouseButton.RightButton and self._drag_source_node:  #modif for momo
             if self._pending_line:
                 self.scene.removeItem(self._pending_line)
                 self._pending_line = None
+
+            self._clear_hover_highlight()                                     #added for appa
 
             scene_pos = self.mapToScene(event.pos())
             item = self.scene.itemAt(scene_pos, self.transform())
@@ -238,44 +316,32 @@ class CanvasView(QGraphicsView):
         # Both must be handled so the shortcut works cross-platform.
         _DELETE_KEYS = (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
         if event.key() in _DELETE_KEYS:
-            selected = self.scene.selectedItems()
-            nodes = [i for i in selected if isinstance(i, NodeItem)]
-            conns = [i for i in selected if isinstance(i, ConnectionItem)]
+            for item in self.scene.selectedItems():
+                if isinstance(item, NodeItem):
+                    self.network_vm.remove_layer(item.layer_id)
+                elif isinstance(item, ConnectionItem):
+                    self.network_vm.remove_connection(
+                        item.start_node.layer_id,
+                        item.end_node.layer_id,
+                    )
 
-            if not nodes and not conns:
-                super().keyPressEvent(event)
-                return
+        elif event.key() == Qt.Key.Key_Escape and self._connect_mode:        #added for appa
+            # If a source node is already selected, just cancel the selection  #added for appa
+            # without exiting connect mode — lets the user re-pick.            #added for appa
+            if self._connect_first_node is not None:                           #added for appa
+                self._cancel_connect_selection()                               #added for appa
+                main = self.window()                                           #added for appa
+                if hasattr(main, "statusBar"):                                 #added for appa
+                    main.statusBar().showMessage(                              #added for appa
+                        "Selection cleared — click a source node to start again.", 3000  #added for appa
+                    )                                                          #added for appa
+            else:                                                              #added for appa
+                # No selection pending — Escape exits connect mode entirely    #added for appa
+                main = self.window()                                           #added for appa
+                if hasattr(main, "btn_connect"):                               #added for appa
+                    main.btn_connect.setChecked(False)                         #added for appa
+                    main._on_toggle_connect_mode()                             #added for appa
 
-            # Build a human-readable summary of what will be deleted
-            parts = []
-            if nodes:
-                # NodeItem stores the display name — try .name then fall back to .layer_id
-                def _node_label(n):
-                    return getattr(n, "name", None) or getattr(n, "layer_id", "?")
-                names = ", ".join(f'"{_node_label(n)}"' for n in nodes)
-                parts.append(f"{len(nodes)} layer(s): {names}")
-            if conns:
-                parts.append(f"{len(conns)} connection(s)")
-            summary = "\n".join(parts)
-
-            reply = QMessageBox.question(
-                self,
-                "Confirm Delete",
-                f"Delete the following?\n\n{summary}",
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
-                QMessageBox.StandardButton.Cancel,
-            )
-            if reply != QMessageBox.StandardButton.Yes:
-                super().keyPressEvent(event)
-                return
-
-            for item in nodes:
-                self.network_vm.remove_layer(item.layer_id)
-            for item in conns:
-                self.network_vm.remove_connection(
-                    item.start_node.layer_id,
-                    item.end_node.layer_id,
-                )
         super().keyPressEvent(event)
 
         #for the animated connection

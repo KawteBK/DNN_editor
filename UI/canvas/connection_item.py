@@ -4,8 +4,8 @@ from PyQt6.QtCore import Qt, QTimer
 
 
 class ConnectionItem(QGraphicsLineItem):
-    _PEN_NORMAL   = QPen(QColor("#FFFFFF"), 2)
-    _PEN_SELECTED = QPen(QColor("#3397C5"), 2)   # orange when selected
+    _PEN_NORMAL   = QPen(QColor("#3397C5"), 2)
+    _PEN_SELECTED = QPen(QColor("#EAF4F8"), 2)   #white when selected
 
     def __init__(self, start_node, end_node):
         super().__init__()
