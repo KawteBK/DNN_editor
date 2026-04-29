@@ -143,18 +143,20 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self._central_stack)
 
 
-        #style for teh tabs! sorry you were too ugly
-
-        self.tabs.setStyleSheet("""  # added this for aang
+        # Tab style — matches ResultsDock's _TAB_STYLE exactly
+        self.tabs.setStyleSheet("""
+    QTabWidget::pane { border: none; background: #2b2b2b; }
     QTabBar::tab {
-        font-size: 13px;
-        font-weight: bold;
-        padding: 8px 16px;
+        background: #393d3f; color: #888888;
+        padding: 8px 18px; border: none;
+        font-size: 13px; font-weight: bold;
         min-width: 80px;
     }
     QTabBar::tab:selected {
-        background-color: #3c3f41;
+        background: #2b2b2b; color: #cccccc;
+        border-bottom: 2px solid #06b6d4;
     }
+    QTabBar::tab:hover { color: #cccccc; }
 """)
 
         # ── docks ─────────────────────────────────────────────────────────────
