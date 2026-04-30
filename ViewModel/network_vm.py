@@ -267,6 +267,105 @@ class NetworkVM(QObject):
     def is_valid(self) -> bool:
         return self._network is not None and self._network.validate()
 
+    def get_validation_errors(self) -> list[str]:
+        """
+        Returns a list of human-readable problems with the current network.
+        An empty list means the network is ready to train.
+
+        Checks performed (in order shown to the user):
+          1. No network loaded at all.
+          2. Fewer than two layers (input + at least one other).
+          3. Layers with no connections at all — completely isolated nodes.
+          4. Layers that are reachable from input but have no outgoing path
+             to any output layer (dead-end branches).
+          5. Layers that feed into an output but are not reachable from input
+             (floating sinks — rare but possible after deletions).
+          6. No output layer exists in the graph.
+        """
+        if self._network is None:
+            return ["No network loaded."]
+
+        layers = self._network.layers
+        connections = self._network.connections
+
+        errors: list[str] = []
+
+        # ── basic size check ─────────────────────────────────────────────────
+        if len(layers) < 2:
+            errors.append("Network must have at least one layer besides the Input.")
+            return errors   # nothing else is meaningful with a single node
+
+        # ── build adjacency in both directions ───────────────────────────────
+        outgoing: dict[str, list[str]] = {lid: [] for lid in layers}
+        incoming: dict[str, list[str]] = {lid: [] for lid in layers}
+        for conn in connections:
+            outgoing[conn._fromLayer].append(conn._toLayer)
+            incoming[conn._toLayer].append(conn._fromLayer)
+
+        # ── find input and output layer ids ──────────────────────────────────
+        input_ids  = [lid for lid, l in layers.items() if getattr(l, "_isInput",  False)]
+        output_ids = [lid for lid, l in layers.items() if getattr(l, "_isOutput", False)]
+
+        if not output_ids:
+            errors.append("Network has no output layer.")
+
+        # ── BFS from each input to find reachable nodes ───────────────────────
+        reachable_from_input: set[str] = set()
+        queue = list(input_ids)
+        while queue:
+            node = queue.pop()
+            if node in reachable_from_input:
+                continue
+            reachable_from_input.add(node)
+            queue.extend(outgoing.get(node, []))
+
+        # ── BFS backward from each output to find nodes that reach output ─────
+        reaches_output: set[str] = set()
+        queue = list(output_ids)
+        while queue:
+            node = queue.pop()
+            if node in reaches_output:
+                continue
+            reaches_output.add(node)
+            queue.extend(incoming.get(node, []))
+
+        # ── classify every non-input, non-output layer ────────────────────────
+        orphans:    list[str] = []   # no connections whatsoever
+        dead_ends:  list[str] = []   # reachable from input but no path to output
+        floating:   list[str] = []   # reaches output but not reachable from input
+
+        for lid, layer in layers.items():
+            is_input  = getattr(layer, "_isInput",  False)
+            is_output = getattr(layer, "_isOutput", False)
+            if is_input or is_output:
+                continue
+
+            has_any_conn = bool(outgoing[lid]) or bool(incoming[lid])
+            if not has_any_conn:
+                orphans.append(layer._name or lid)
+            elif lid in reachable_from_input and lid not in reaches_output:
+                dead_ends.append(layer._name or lid)
+            elif lid not in reachable_from_input and lid in reaches_output:
+                floating.append(layer._name or lid)
+
+        if orphans:
+            joined = ", ".join(f"'{n}'" for n in orphans)
+            errors.append(
+                f"Disconnected layer(s) not linked to anything: {joined}."
+            )
+        if dead_ends:
+            joined = ", ".join(f"'{n}'" for n in dead_ends)
+            errors.append(
+                f"Layer(s) not connected to an output: {joined}."
+            )
+        if floating:
+            joined = ", ".join(f"'{n}'" for n in floating)
+            errors.append(
+                f"Layer(s) not reachable from the input: {joined}."
+            )
+
+        return errors
+
     # ── private helpers ───────────────────────────────────────────────────────
 
     def _next_id(self, layer_type: str) -> str:

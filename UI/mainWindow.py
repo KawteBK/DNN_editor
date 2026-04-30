@@ -93,6 +93,7 @@ class MainWindow(QMainWindow):
         # sounds are played via _play_sound() — no asset file required
         # ── toolbar ───────────────────────────────────────────────────────────
         toolbar = QToolBar()
+        self._toolbar = toolbar          # stored so hide/show can target the bar itself
         self.addToolBar(toolbar)
         toolbar.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
 
@@ -217,13 +218,6 @@ class MainWindow(QMainWindow):
         toolbar.addSeparator()
 
         
-
-        # Hide project-specific widgets immediately — welcome screen shows first.
-        # We do this right here so no show/repaint event can undo the hide
-        # before _update_ui_for_no_project() runs at the end of __init__.
-        for w in [self.btn_stop, self.btn_train, self.btn_delete,
-                  self.btn_add, self.btn_connect, self.training_time_label]:
-            w.setVisible(False)
 
         # Brand label goes on the LEFT — toolbar is RightToLeft so addWidget
         # pushes it to the far left.  We use a spacer widget to pin it.
@@ -416,6 +410,25 @@ class MainWindow(QMainWindow):
         if self.project_vm.project is None:
             self._show_error("No project loaded.")
             return
+
+        # ── graph connectivity check ──────────────────────────────────────────
+        # network_vm.is_valid() / network.validate() already gates the Train
+        # button, but the button state can lag (e.g. the user bypasses it via
+        # the keyboard shortcut, or isReadyToTrain() passed while the graph was
+        # still incomplete).  We re-run the full check here so training can
+        # never start with a broken graph, and we surface exactly what is wrong.
+        graph_errors = self.network_vm.get_validation_errors()
+        if graph_errors:
+            bullet_list = "\n".join(f"  • {e}" for e in graph_errors)
+            QMessageBox.warning(
+                self,
+                "Network Not Ready",
+                "Training cannot start — the network graph has the following "
+                f"issue(s):\n\n{bullet_list}\n\n"
+                "Fix these in the Network tab before training.",
+            )
+            return
+
         self.training_vm.start(self.project_vm.project)
 
     def _on_stop(self):
@@ -682,9 +695,9 @@ class MainWindow(QMainWindow):
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.hide()
-        # Hide project toolbar buttons on welcome screen
-        for w in self._project_toolbar_widgets:
-            w.setVisible(False)
+        # Hide the entire toolbar on the welcome screen so the bar strip
+        # itself doesn't appear — hiding individual widgets left a blank strip.
+        self._toolbar.hide()
 
 
 
@@ -708,7 +721,8 @@ class MainWindow(QMainWindow):
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.show()
-        # Restore project toolbar buttons when project is active
+        # Restore the toolbar and all its project-specific widgets.
+        self._toolbar.show()
         for w in self._project_toolbar_widgets:
             w.setVisible(True)
 
@@ -722,19 +736,24 @@ class MainWindow(QMainWindow):
        else:
         self.btn_train.setEnabled(False)
         self._act_train.setEnabled(False)
-        # Optionally show tooltip explaining why
+        # Build a tooltip that tells the user exactly what is missing.
         if self.project_vm.project:
             missing = []
-            if self.project_vm.project.network is None or not self.project_vm.project.network.validate():
-                missing.append("valid network")
+            # Use get_validation_errors() so the tooltip matches what the
+            # training-start dialog would say, rather than the generic
+            # "valid network" string that gave no actionable detail.
+            graph_errors = self.network_vm.get_validation_errors()
+            if graph_errors:
+                missing.extend(graph_errors)
             if self.project_vm.project.dataset is None:
-                missing.append("dataset selected")
+                missing.append("dataset not selected")
             if self.project_vm.project.trainingConfig is None:
-                missing.append("training config")
+                missing.append("training config not set")
             if self.project_vm.project.networkConfig is None:
-                missing.append("network config")
+                missing.append("network config not set")
             if missing:
-                self.btn_train.setToolTip(f"Cannot train: missing {', '.join(missing)}")
+                bullet_list = "\n".join(f"• {m}" for m in missing)
+                self.btn_train.setToolTip(f"Cannot train:\n{bullet_list}")
             else:
                 self.btn_train.setToolTip("")
         else:
