@@ -316,14 +316,9 @@ class CanvasView(QGraphicsView):
         # Both must be handled so the shortcut works cross-platform.
         _DELETE_KEYS = (Qt.Key.Key_Delete, Qt.Key.Key_Backspace)
         if event.key() in _DELETE_KEYS:
-            for item in self.scene.selectedItems():
-                if isinstance(item, NodeItem):
-                    self.network_vm.remove_layer(item.layer_id)
-                elif isinstance(item, ConnectionItem):
-                    self.network_vm.remove_connection(
-                        item.start_node.layer_id,
-                        item.end_node.layer_id,
-                    )
+            main = self.window()
+            if hasattr(main, "_on_delete_selected"):
+                main._on_delete_selected()
 
         elif event.key() == Qt.Key.Key_Escape and self._connect_mode:        #added for appa
             # If a source node is already selected, just cancel the selection  #added for appa

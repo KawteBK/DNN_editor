@@ -1,23 +1,35 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
-from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve, QPoint
-from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QLinearGradient
+from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QFont, QColor, QPainter, QPen
+import sys
+
+# Modifier key label — ⌘ on macOS, Ctrl on Windows/Linux
+_MOD   = "⌘"    if sys.platform == "darwin" else "Ctrl"
+_SHIFT = "⇧"    if sys.platform == "darwin" else "Shift"
 
 
 class _LinkButton(QPushButton):
     """
     A button that looks like a VS Code sidebar link —
     no border, no background, just coloured text with an arrow prefix
-    and a subtle underline that slides in on hover.
+    and a subtle shortcut hint aligned to the right.
     """
 
-    def __init__(self, arrow: str, text: str, parent=None):
-        super().__init__(f"  {arrow}  {text}", parent)
-        self._base_color   = "#4FC3F7"   # VS Code light-blue link colour
+    def __init__(self, arrow: str, text: str, shortcut: str = "", parent=None):
+        # Build label: arrow + text padded, then shortcut hint right-aligned via spaces
+        self._label_text = text
+        self._shortcut   = shortcut
+        display = f"  {arrow}  {text}"
+        super().__init__(display, parent)
+        self._base_color   = "#4FC3F7"
         self._hover_color  = "#81D4FA"
+        self._hint_color   = "#3d5060"
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setFlat(True)
         self.setFont(QFont("Consolas", 13))
         self._apply_style(self._base_color)
+        if shortcut:
+            self.setToolTip(shortcut)
 
     def _apply_style(self, color: str) -> None:
         self.setStyleSheet(f"""
@@ -34,12 +46,33 @@ class _LinkButton(QPushButton):
             }}
         """)
 
+    def paintEvent(self, event):
+        """Draw the button text + a right-aligned shortcut hint."""
+        super().paintEvent(event)
+        if not self._shortcut:
+            return
+        from PyQt6.QtGui import QPainter, QColor, QFont
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        hint_font = QFont("Consolas", 10)
+        painter.setFont(hint_font)
+        painter.setPen(QColor(self._hint_color if not self.underMouse() else "#4a6880"))
+        # Draw shortcut hint flush-right with a small right margin
+        rect = self.rect().adjusted(0, 0, -8, 0)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                         self._shortcut)
+        painter.end()
+
     def enterEvent(self, event):
         self._apply_style(self._hover_color)
+        self._hint_color = "#4a6880"
+        self.update()
         super().enterEvent(event)
 
     def leaveEvent(self, event):
         self._apply_style(self._base_color)
+        self._hint_color = "#3d5060"
+        self.update()
         super().leaveEvent(event)
 
 
@@ -78,7 +111,10 @@ class WelcomeScreen(QWidget):
         root.addStretch(3)
 
         # ── bottom hint ────────────────────────────────────────────────────
-        hint = QLabel("File → New Project  ·  File → Open")
+        hint = QLabel(
+            f"New  {_MOD}+N   ·   Open  {_MOD}+O   ·   "
+            f"Save  {_MOD}+S   ·   Save As  {_MOD}+{_SHIFT}+S"
+        )
         hint.setAlignment(Qt.AlignmentFlag.AlignCenter)
         hint.setStyleSheet("color: #555a63; font-size: 11px; font-family: Consolas;")
         root.addWidget(hint)
@@ -153,13 +189,13 @@ class WelcomeScreen(QWidget):
         layout.addSpacing(10)
 
         # ── link buttons ───────────────────────────────────────────────────
-        btn_new = _LinkButton("$(file-add)", "New Project", self)
+        btn_new = _LinkButton("$(file-add)", "New Project", f"{_MOD}+N", self)
         btn_new.clicked.connect(self.new_project_requested)
         layout.addWidget(btn_new)
 
         layout.addSpacing(6)
 
-        btn_open = _LinkButton("$(folder-opened)", "Open Existing Project", self)
+        btn_open = _LinkButton("$(folder-opened)", "Open Existing Project", f"{_MOD}+O", self)
         btn_open.clicked.connect(self.open_project_requested)
         layout.addWidget(btn_open)
 

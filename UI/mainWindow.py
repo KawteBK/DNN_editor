@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget,                          # added this for aang
 )
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QKeySequence, QShortcut
 from tabs.network_tab import NetworkTab
 from tabs.code_tab import CodeTab
 from tabs.inference_tab import OngletInference
@@ -58,10 +59,18 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         self._file_menu = menubar.addMenu("File")
-        self._file_menu.addAction("New project", self._on_new)
-        self._file_menu.addAction("Open",        self._on_open)
-        self._file_menu.addAction("Save",        self._on_save)
-        self._file_menu.addAction("Save As…",    self._on_save_as) 
+
+        act_new = self._file_menu.addAction("New project", self._on_new)
+        act_new.setShortcut(QKeySequence.StandardKey.New)          # Ctrl+N / Cmd+N
+
+        act_open = self._file_menu.addAction("Open", self._on_open)
+        act_open.setShortcut(QKeySequence.StandardKey.Open)        # Ctrl+O / Cmd+O
+
+        act_save = self._file_menu.addAction("Save", self._on_save)
+        act_save.setShortcut(QKeySequence.StandardKey.Save)        # Ctrl+S / Cmd+S
+
+        act_save_as = self._file_menu.addAction("Save As\u2026", self._on_save_as)
+        act_save_as.setShortcut(QKeySequence.StandardKey.SaveAs)   # Ctrl+Shift+S / Cmd+Shift+S
 
         self._edit_menu = menubar.addMenu("Edit")
        # self._edit_menu.addAction("Undo")   # stubs  wired later 
@@ -70,7 +79,12 @@ class MainWindow(QMainWindow):
         window_menu = menubar.addMenu("Window")
 
         self._train_menu = menubar.addMenu("Train")
-        self._train_menu.addAction("Start Training", self._on_train)
+        self._act_train = self._train_menu.addAction("Start Training", self._on_train)
+        self._act_train.setShortcut(QKeySequence("Ctrl+T"))   # Ctrl+T / Cmd+T cross-platform
+
+        self._act_stop = self._train_menu.addAction("Stop Training", self._on_stop)
+        self._act_stop.setShortcut(QKeySequence("Ctrl+Shift+T"))  # Ctrl+Shift+T to stop
+        self._act_stop.setEnabled(False)   # only active while training
 
         menubar.addMenu("About")
         menubar.addMenu("Settings")
@@ -89,13 +103,14 @@ class MainWindow(QMainWindow):
             "  background-color: {bg};"
             "  color: {fg};"
             "  padding: 5px 16px;"
+            "  margin: 2px;"
             "  border: 1px solid {border};"
             "  border-radius: 8px;"
             "  font-weight: bold;"
             "  font-size: 13px;"
             "}}"
             "QPushButton:hover {{ background-color: {hover}; }}"
-            "QPushButton:disabled {{ background-color: #333; color: #666; border-color: #444; }}"
+            "QPushButton:disabled {{ background-color: #1e1e1e; color: #555; border-color: #333; }}"
         )
 
         def _btn_style(bg, fg, border, hover):
@@ -120,7 +135,10 @@ class MainWindow(QMainWindow):
         self.btn_delete  = QPushButton("  Delete")
         self.btn_add     = QPushButton("  Add")
         self.btn_connect = QPushButton("  Connect")
-        self.btn_connect.setCheckable(True)
+        self.btn_connect.setCheckable(True) 
+         #for the training time label
+        self.training_time_label = QLabel("Training Time: --")
+        toolbar.addWidget(self.training_time_label)
 
         # Try to load qtawesome icons; fall back to unicode if not installed
         try:
@@ -138,32 +156,32 @@ class MainWindow(QMainWindow):
             self.btn_add.setText("＋  Add")
             self.btn_connect.setText("⛓  Connect")
 
-        # ── per-button styles (fix 14 & 15) ──────────────────────────────────
+        # ── per-button styles — muted to fit the dark editor aesthetic ─────────
         self.btn_train.setStyleSheet(
-            _btn_style(bg="#1a5e35", fg="#ffffff", border="#27ae60", hover="#1e7a42"))
+            _btn_style(bg="#162b1c", fg="#aee1ae", border="#2e603a", hover="#2b4934"))
         self.btn_stop.setStyleSheet(
-            _btn_style(bg="#5e1a1a", fg="#ffffff", border="#c0392b", hover="#7a1e1e"))
+            _btn_style(bg="#2b1515", fg="#e3a8a8", border="#7B3D2F", hover="#512727"))
         self.btn_delete.setStyleSheet(
-            _btn_style(bg="#5e1a1a", fg="#ffffff", border="#c0392b", hover="#7a1e1e"))
+            _btn_style(bg="#2b1515", fg="#e3a8a8", border="#7B3D2F", hover="#572727"))
         self.btn_add.setStyleSheet(
-            _btn_style(bg="#1a3e5e", fg="#ffffff", border="#2980b9", hover="#1e5080"))
+            _btn_style(bg="#131e2b", fg="#a5cde1", border="#2f4c71", hover="#512727"))
 
         self._CONNECT_STYLE_OFF = (
             "QPushButton {"
-            "  background-color: #1e4a52; color: #7ecfda;"
-            "  padding: 5px 10px; border: 1px solid #2a8a99;"
+            "  background-color: #111e22; color: #5a9aa8;"
+            "  padding: 5px 10px; margin: 2px; border: 1px solid #1e3d45;"
             "  border-radius: 8px; font-weight: bold; font-size: 13px;"
             "}"
-            "QPushButton:hover { background-color: #26626e; }"
-            "QPushButton:disabled { background-color: #333; color: #666; border-color: #444; }"
+            "QPushButton:hover { background-color: #182a30; }"
+            "QPushButton:disabled { background-color: #1e1e1e; color: #555; border-color: #333; }"
         )
         self._CONNECT_STYLE_ON = (
             "QPushButton {"
-            "  background-color: #00bcd4; color: #ffffff;"
-            "  padding: 5px 10px; border: 2px solid #00e5ff;"
+            "  background-color: #0d4a55; color: #7ecfda;"
+            "  padding: 5px 10px; margin: 2px; border: 2px solid #1a7a8a;"
             "  border-radius: 8px; font-weight: bold; font-size: 13px;"
             "}"
-            "QPushButton:hover { background-color: #00acc1; }"
+            "QPushButton:hover { background-color: #0f5a67; }"
         )
         self.btn_connect.setStyleSheet(self._CONNECT_STYLE_OFF)
 
@@ -181,11 +199,12 @@ class MainWindow(QMainWindow):
 
         self.btn_stop.setEnabled(False)   # only active while training
 
-        # ── keep references for show/hide (fix 13) ───────────────────────────
+        # ── keep references for show/hide ─────────────────────────────────────
         # These are the widgets that should be invisible on the welcome screen.
+        # training_time_label is included so it also hides/shows with the rest.
         self._project_toolbar_widgets = [
             self.btn_stop, self.btn_train, self.btn_delete,
-            self.btn_add, self.btn_connect,
+            self.btn_add, self.btn_connect, self.training_time_label,
         ]
 
         # ── add to toolbar (RightToLeft layout: last added = rightmost) ──────
@@ -197,8 +216,14 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.btn_connect)
         toolbar.addSeparator()
 
-        self.training_time_label = QLabel("Training Time: --")
-        toolbar.addWidget(self.training_time_label)
+        
+
+        # Hide project-specific widgets immediately — welcome screen shows first.
+        # We do this right here so no show/repaint event can undo the hide
+        # before _update_ui_for_no_project() runs at the end of __init__.
+        for w in [self.btn_stop, self.btn_train, self.btn_delete,
+                  self.btn_add, self.btn_connect, self.training_time_label]:
+            w.setVisible(False)
 
         # Brand label goes on the LEFT — toolbar is RightToLeft so addWidget
         # pushes it to the far left.  We use a spacer widget to pin it.
@@ -511,6 +536,8 @@ class MainWindow(QMainWindow):
     def _on_training_started(self):
         self.btn_train.setEnabled(False)
         self.btn_stop.setEnabled(True)
+        self._act_train.setEnabled(False)   # shortcut disabled while running
+        self._act_stop.setEnabled(True)     # shortcut enabled to allow stopping
         self._timer.start()
         self.statusBar().showMessage("Training…")
 
@@ -541,6 +568,7 @@ class MainWindow(QMainWindow):
     def _on_training_stopped(self):
         self.btn_train.setEnabled(True)
         self.btn_stop.setEnabled(False)
+        self._act_stop.setEnabled(False)    # can't stop what isn't running
         self._timer.stop()
 
 
@@ -633,6 +661,10 @@ class MainWindow(QMainWindow):
                 if action.text() not in ["New project", "Open", "Quit", "Exit"]:
                     action.setEnabled(False)
 
+        # Train/Stop shortcuts always disabled with no project
+        self._act_train.setEnabled(False)
+        self._act_stop.setEnabled(False)
+
         # Clear the canvas and code tab
         self.canvas.clear_canvas()
         self.code_tab.clear()
@@ -645,12 +677,12 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("No project loaded. Create or open a project to begin.")
         self.setWindowTitle("NeuroCraft")
 
-        # added this for aang — flip to welcome screen and hide all docks
+        # Flip to welcome screen and hide all docks
         self._central_stack.setCurrentWidget(self._welcome)
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.hide()
-        # fix 13 — hide project buttons on welcome screen
+        # Hide project toolbar buttons on welcome screen
         for w in self._project_toolbar_widgets:
             w.setVisible(False)
 
@@ -665,15 +697,18 @@ class MainWindow(QMainWindow):
             for action in menu.actions():
                 action.setEnabled(True)
 
+        # Stop action only active during training — reset it here
+        self._act_stop.setEnabled(False)
+
         self.setWindowTitle(f"NeuroCraft — {project.name}")
         self.statusBar().showMessage(f"Loaded project: {project.name}", 3000)
 
-        # added this for aang — flip back to the tabs and restore all docks
+        # Flip back to the tabs and restore all docks
         self._central_stack.setCurrentWidget(self.tabs)
         for dock in [self.palette_dock, self.config_dock, self.dataset_dock,
                      self.network_config_dock, self.results_dock]:
             dock.show()
-        # fix 13 — restore project buttons when project is active
+        # Restore project toolbar buttons when project is active
         for w in self._project_toolbar_widgets:
             w.setVisible(True)
 
@@ -682,9 +717,11 @@ class MainWindow(QMainWindow):
        """Enable/disable Train button based on project readiness."""
        if self.project_vm.project and self.project_vm.project.isReadyToTrain():
           self.btn_train.setEnabled(True)
+          self._act_train.setEnabled(True)
           self.btn_train.setToolTip("") 
        else:
         self.btn_train.setEnabled(False)
+        self._act_train.setEnabled(False)
         # Optionally show tooltip explaining why
         if self.project_vm.project:
             missing = []
