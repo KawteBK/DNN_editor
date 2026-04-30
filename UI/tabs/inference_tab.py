@@ -483,9 +483,10 @@ class OngletInference(QWidget):
             f"border:1px solid {_BORDER}; border-radius:6px; padding:4px;"
         )
         card.setMinimumWidth(80)
+        card.setMinimumHeight(90)
         layout = QVBoxLayout()
-        layout.setSpacing(1)
-        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(6) 
+        layout.setContentsMargins(6, 10, 6, 10)
         lbl_title = QLabel(title)
         lbl_title.setStyleSheet(f"font-size:10px; color:{_DIM}; border:none;")
         lbl_value = QLabel(value)
