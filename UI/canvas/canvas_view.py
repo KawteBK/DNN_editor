@@ -25,9 +25,12 @@ class CanvasView(QGraphicsView):
         # ADDED: (from_id, to_id) → ConnectionItem lookup for removal
         self._connections: dict[tuple, ConnectionItem] = {}
 
-        # Monotonically increasing spawn counter — never reset even when nodes
-        # are deleted, so a freshly added layer never reuses a slot occupied by
-        # a surviving node.
+        # Monotonically increasing spawn counter — never reset on individual
+        # node deletions, so a freshly added layer never reuses a slot occupied
+        # by a surviving node.  It IS reset to 0 by clear_canvas() so that
+        # nodes in a freshly loaded project are placed from cell (0, 0).
+        # Pass 1 of _next_spawn_position() guards against overlaps even after a
+        # reset by scanning for actually-free cells before committing.
         self._spawn_counter: int = 0
 
         # ── connect mode state ────────────────────────────────────────────────
@@ -147,6 +150,11 @@ class CanvasView(QGraphicsView):
         # ADDED: removes the NodeItem when NetworkVM confirms deletion.
         node = self._nodes.pop(layer_id, None)
         if node:
+            # connection_removed signals fire before layer_removed (per network_vm),
+            # so all ConnectionItems are already gone from the scene by now.
+            # Clear the node's own connections list to drop the stale references
+            # and prevent memory leaks or crashes if anything iterates it later.
+            node.connections.clear()
             self.scene.removeItem(node)
 
     def _on_connection_added(self, from_id: str, to_id: str) -> None:
