@@ -80,10 +80,11 @@ class MainWindow(QMainWindow):
 
         self._train_menu = menubar.addMenu("Train")
         self._act_train = self._train_menu.addAction("Start Training", self._on_train)
-        self._act_train.setShortcut(QKeySequence("Ctrl+T"))   # Ctrl+T / Cmd+T cross-platform
+        _modifier = "Meta" if platform.system() == "Darwin" else "Ctrl"
+        self._act_train.setShortcut(QKeySequence(f"{_modifier}+T"))         # Cmd+T on macOS, Ctrl+T elsewhere
 
         self._act_stop = self._train_menu.addAction("Stop Training", self._on_stop)
-        self._act_stop.setShortcut(QKeySequence("Ctrl+Shift+T"))  # Ctrl+Shift+T to stop
+        self._act_stop.setShortcut(QKeySequence(f"{_modifier}+Shift+T"))    # Cmd+Shift+T on macOS, Ctrl+Shift+T elsewhere
         self._act_stop.setEnabled(False)   # only active while training
 
         menubar.addMenu("About")
@@ -122,13 +123,13 @@ class MainWindow(QMainWindow):
         brand_label.setStyleSheet(
             "QLabel {"
             "  color: #4FC3F7;"
-            "  font-family: Consolas, 'Courier New', monospace;"
             "  font-size: 16px;"
             "  font-weight: bold;"
             "  padding: 0px 12px;"
             "  letter-spacing: 1px;"
             "}"
-        )
+        )#            "  font-family: Consolas, 'Courier New', monospace;"
+
 
         # ── buttons ───────────────────────────────────────────────────────────
         self.btn_stop    = QPushButton("  Stop")

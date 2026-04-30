@@ -304,7 +304,7 @@ class NetworkVM(QObject):
 
         # ── find input and output layer ids ──────────────────────────────────
         input_ids  = [lid for lid, l in layers.items() if getattr(l, "_isInput",  False)]
-        output_ids = [lid for lid, l in layers.items() if getattr(l, "_isOutput", False)]
+        output_ids = [lid for lid, l in layers.items() if getattr(l, "_isOutput", True)]
 
         if not output_ids:
             errors.append("Network has no output layer.")
