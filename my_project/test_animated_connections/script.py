@@ -19,13 +19,28 @@ from sklearn.metrics import f1_score, precision_score, recall_score
     class Model(nn.Module):
         def __init__(self):
             super().__init__()
-            self.net = nn.Sequential(
-                nn.Flatten(start_dim=1),  # Flatten3
-            nn.Linear(784, 128, bias=True),  # Densekkk
-            )
+            self.conv2d_2 = nn.Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        self.conv2d_3 = nn.Conv2d(1, 32, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1))
+        self.pooling_1 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2), padding=(0, 0))
+        self.pooling_2 = nn.MaxPool2d(kernel_size=(2, 2), stride=(2, 2), padding=(0, 0))
+        self.flatten_5 = nn.Flatten(start_dim=1)
+        self.flatten_6 = nn.Flatten(start_dim=1)
+        self.dense_2 = nn.Linear(6272, 128, bias=True)
 
         def forward(self, x):
-            return self.net(x)
+        # Store outputs of each layer
+        outputs = {}
+        outputs['input'] = x
+
+        outputs['conv2d_2'] = self.conv2d_2(outputs['input'])  # Conv2D 2
+        outputs['conv2d_3'] = self.conv2d_3(outputs['input'])  # Conv2D 3
+        outputs['pooling_1'] = self.pooling_1(outputs['conv2d_2'])  # Pooling 1
+        outputs['pooling_2'] = self.pooling_2(outputs['conv2d_3'])  # Pooling 2
+        outputs['flatten_5'] = self.flatten_5(outputs['pooling_1'])  # Flatten 5
+        outputs['flatten_6'] = self.flatten_6(outputs['pooling_2'])  # Flatten 6
+        outputs['merge_2'] = outputs['flatten_5'] + outputs['flatten_6']  # Merge 2
+        outputs['dense_2'] = self.dense_2(outputs['merge_2'])  # Dense 2
+        return outputs['dense_2']
 
 
 def get_dataloaders(data_root: str = "./data"):

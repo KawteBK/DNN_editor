@@ -38,6 +38,79 @@ from ViewModel.network_vm import NetworkVM
 from ViewModel.training_vm import TrainingVM
 
 
+# ── Toolbar button style system ───────────────────────────────────────────────
+#
+# All toolbar buttons share the same geometry and typography.
+# Four semantic roles:
+#   Positive  — Train   — muted green
+#   Danger    — Stop    — muted red        (also used for Delete)
+#   Neutral   — Add     — muted slate-blue
+#   Toggle    — Connect — teal ghost / filled
+#
+# States: normal · hover · pressed · disabled
+#
+_TOOLBAR_BTN = """
+    QPushButton {{
+        padding: 5px 14px;
+        margin: 2px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: 600;
+        letter-spacing: 0.2px;
+        border: 1px solid {border};
+        background: {bg};
+        color: {fg};
+    }}
+    QPushButton:hover {{
+        background: {bg_hover};
+        border-color: {border_hover};
+    }}
+    QPushButton:pressed {{
+        background: {bg_pressed};
+    }}
+    QPushButton:disabled {{
+        background: transparent;
+        border-color: #2a2a2a;
+        color: #444444;
+    }}
+"""
+
+# Positive — Train
+_BTN_TRAIN = _TOOLBAR_BTN.format(
+    bg="#162b1c",        fg="#cff2d2",         border="#2a5230",
+    bg_hover="#1e3d27",  border_hover="#3a7045",
+    bg_pressed="#112218",
+)
+
+# Danger — Stop / Delete  (same role, same palette)
+_BTN_DANGER = _TOOLBAR_BTN.format(
+    bg="#2b1515",        fg="#f1dddc",         border="#5a2d2d",
+    bg_hover="#3d1c1c",  border_hover="#7a3a3a",
+    bg_pressed="#221010",
+)
+
+# Neutral — Add
+_BTN_NEUTRAL = _TOOLBAR_BTN.format(
+    bg="#131e2b",        fg="#cae5f3",         border="#243a52",
+    bg_hover="#1b2d40",  border_hover="#335572",
+    bg_pressed="#0f1924", 
+)
+
+# Toggle Connect — OFF (ghost)
+_BTN_CONNECT_OFF = _TOOLBAR_BTN.format(
+    bg="#111e22",        fg="#9dd4df",         border="#1a3540",
+    bg_hover="#182a30",  border_hover="#245060",
+    bg_pressed="#0e181d",
+)
+
+# Toggle Connect — ON (filled teal)
+_BTN_CONNECT_ON = _TOOLBAR_BTN.format(
+    bg="#0d4a55",        fg="#badfe4",         border="#1a7a8a",
+    bg_hover="#0f5565",  border_hover="#228898",
+    bg_pressed="#0a3c45",
+)
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -98,27 +171,7 @@ class MainWindow(QMainWindow):
         self.addToolBar(toolbar)
         toolbar.setLayoutDirection(Qt.LayoutDirection.RightToLeft)
 
-        # ── shared button style (matches Connect button, more rounded) ────────
-        # All buttons share this base; each overrides only background/border color.
-        _BTN_BASE = (
-            "QPushButton {{"
-            "  background-color: {bg};"
-            "  color: {fg};"
-            "  padding: 5px 16px;"
-            "  margin: 2px;"
-            "  border: 1px solid {border};"
-            "  border-radius: 8px;"
-            "  font-weight: bold;"
-            "  font-size: 13px;"
-            "}}"
-            "QPushButton:hover {{ background-color: {hover}; }}"
-            "QPushButton:disabled {{ background-color: #1e1e1e; color: #555; border-color: #333; }}"
-        )
-
-        def _btn_style(bg, fg, border, hover):
-            return _BTN_BASE.format(bg=bg, fg=fg, border=border, hover=hover)
-
-        # ── NeuroCraft branding label in toolbar (fix 12) ─────────────────────
+        # ── NeuroCraft branding label in toolbar ──────────────────────────────
         brand_label = QLabel("NeuroCraft")
         brand_label.setStyleSheet(
             "QLabel {"
@@ -128,8 +181,7 @@ class MainWindow(QMainWindow):
             "  padding: 0px 12px;"
             "  letter-spacing: 1px;"
             "}"
-        )#            "  font-family: Consolas, 'Courier New', monospace;"
-
+        )
 
         # ── buttons ───────────────────────────────────────────────────────────
         self.btn_stop    = QPushButton("  Stop")
@@ -137,7 +189,7 @@ class MainWindow(QMainWindow):
         self.btn_delete  = QPushButton("  Delete")
         self.btn_add     = QPushButton("  Add")
         self.btn_connect = QPushButton("  Connect")
-        self.btn_connect.setCheckable(True) 
+        self.btn_connect.setCheckable(True)
          #for the training time label
         self.training_time_label = QLabel("Training Time: --")
         toolbar.addWidget(self.training_time_label)
@@ -154,38 +206,20 @@ class MainWindow(QMainWindow):
             # Fallback: prepend unicode symbols
             self.btn_train.setText("▶  Train")
             self.btn_stop.setText("■  Stop")
-            self.btn_delete.setText("X Delete")
+            self.btn_delete.setText("✕  Delete")
             self.btn_add.setText("＋  Add")
             self.btn_connect.setText("⛓  Connect")
 
-        # ── per-button styles — muted to fit the dark editor aesthetic ─────────
-        self.btn_train.setStyleSheet(
-            _btn_style(bg="#162b1c", fg="#aee1ae", border="#2e603a", hover="#2b4934"))
-        self.btn_stop.setStyleSheet(
-            _btn_style(bg="#2b1515", fg="#e3a8a8", border="#7B3D2F", hover="#512727"))
-        self.btn_delete.setStyleSheet(
-            _btn_style(bg="#2b1515", fg="#e3a8a8", border="#7B3D2F", hover="#572727"))
-        self.btn_add.setStyleSheet(
-            _btn_style(bg="#131e2b", fg="#a5cde1", border="#2f4c71", hover="#512727"))
+        # ── apply unified button styles ───────────────────────────────────────
+        self.btn_train.setStyleSheet(_BTN_TRAIN)
+        self.btn_stop.setStyleSheet(_BTN_DANGER)
+        self.btn_delete.setStyleSheet(_BTN_DANGER)
+        self.btn_add.setStyleSheet(_BTN_NEUTRAL)
+        self.btn_connect.setStyleSheet(_BTN_CONNECT_OFF)
 
-        self._CONNECT_STYLE_OFF = (
-            "QPushButton {"
-            "  background-color: #111e22; color: #5a9aa8;"
-            "  padding: 5px 10px; margin: 2px; border: 1px solid #1e3d45;"
-            "  border-radius: 8px; font-weight: bold; font-size: 13px;"
-            "}"
-            "QPushButton:hover { background-color: #182a30; }"
-            "QPushButton:disabled { background-color: #1e1e1e; color: #555; border-color: #333; }"
-        )
-        self._CONNECT_STYLE_ON = (
-            "QPushButton {"
-            "  background-color: #0d4a55; color: #7ecfda;"
-            "  padding: 5px 10px; margin: 2px; border: 2px solid #1a7a8a;"
-            "  border-radius: 8px; font-weight: bold; font-size: 13px;"
-            "}"
-            "QPushButton:hover { background-color: #0f5a67; }"
-        )
-        self.btn_connect.setStyleSheet(self._CONNECT_STYLE_OFF)
+        # Store connect toggle styles for _on_toggle_connect_mode
+        self._CONNECT_STYLE_OFF = _BTN_CONNECT_OFF
+        self._CONNECT_STYLE_ON  = _BTN_CONNECT_ON
 
         self.btn_connect.setToolTip(
             "Connect mode: click-drag from one node to another to link them.\n"

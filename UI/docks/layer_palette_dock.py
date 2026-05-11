@@ -2,7 +2,16 @@ from PyQt6.QtWidgets import QDockWidget, QScrollArea, QWidget, QVBoxLayout, QPus
 
 from UI.canvas.node_item import LAYER_COLORS
 
-
+LAYER_COLORS = {
+    "InputLayer":  ("#3C5A48", "#1A7A43"),   # green   always the root
+    "Dense":       ("#354A4D", "#105860"),   # teal
+    "Conv2D":      ("#38364D", "#4A4490"),   # purple
+    "Pooling":     ("#7F6634", "#9A5515"),   # amber
+    "Recurrent":   ("#784F42", "#8C3515"),   # coral
+    "Flatten":     ("#74672F", "#906E00"),   # yellowish brown 5ra vibes
+    "Activation":  ("#683949", "#8C2E4F"),   # pink
+    "Merge":       ("#57415F", "#6C3483"),   # purpley-pink, twilight sparkle vibes
+}
 
 class LayerPaletteDock(QDockWidget):
     # CHANGED: accepts network_vm instead of canvas

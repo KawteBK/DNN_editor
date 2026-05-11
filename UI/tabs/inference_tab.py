@@ -8,6 +8,65 @@ from PyQt6.QtGui import QPixmap, QPainter
 from PyQt6.QtSvg import QSvgRenderer
 
 
+# ── Button style system ────────────────────────────────────────────────────────
+#
+# Shared template — geometry, font weight, border-radius are identical across
+# every button in this tab.  Only the color role differs.
+#
+# Roles:
+#   Primary   — Run Inference  — the one clear CTA, teal accent
+#   Toggle ON — mode active    — same teal, filled
+#   Toggle OFF— mode inactive  — ghost / secondary
+
+_BTN_SHARED = """
+    QPushButton {{
+        padding: 7px 18px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.3px;
+        border: 1px solid {border};
+        background: {bg};
+        color: {fg};
+    }}
+    QPushButton:hover {{
+        background: {bg_hover};
+        border-color: {border_hover};
+        color: {fg_hover};
+    }}
+    QPushButton:pressed {{
+        background: {bg_pressed};
+        border-color: {border_pressed};
+    }}
+    QPushButton:disabled {{
+        background: transparent;
+        border-color: #333333;
+        color: #555555;
+    }}
+"""
+
+# Primary — Run Inference (teal CTA, full width via layout)
+_BTN_RUN = _BTN_SHARED.format(
+    bg="#143d40",        fg="#4ec9d4",         border="#1e6068",
+    bg_hover="#1a5059",  fg_hover="#7ee8f0",   border_hover="#2a7d88",
+    bg_pressed="#0f2e32", border_pressed="#1e6068",
+)
+
+# Mode toggle — active state (filled teal)
+_BTN_MODE_ON = _BTN_SHARED.format(
+    bg="#143d40",        fg="#4ec9d4",         border="#1e6068",
+    bg_hover="#1a5059",  fg_hover="#7ee8f0",   border_hover="#2a7d88",
+    bg_pressed="#0f2e32", border_pressed="#1e6068",
+)
+
+# Mode toggle — inactive / ghost state
+_BTN_MODE_OFF = _BTN_SHARED.format(
+    bg="transparent",    fg="#666666",         border="#333333",
+    bg_hover="#222222",  fg_hover="#999999",   border_hover="#444444",
+    bg_pressed="#1a1a1a", border_pressed="#3a3a3a",
+)
+
+
 # ── Icon helpers ──────────────────────────────────────────────────────────────
 
 def _make_svg_pixmap(svg: str, size: int = 14) -> QPixmap:
@@ -141,10 +200,10 @@ class OngletInference(QWidget):
         self._history: list[str] = []
 
         main_layout = QHBoxLayout()
-        main_layout.setSpacing(20)
+        main_layout.setSpacing(24)
         main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.addWidget(self._build_left_panel())
-        main_layout.addWidget(self._build_right_panel())
+        main_layout.addWidget(self._build_left_panel(),  stretch=2)
+        main_layout.addWidget(self._build_right_panel(), stretch=3)
         self.setLayout(main_layout)
 
     # ─────────────────────────────────────────────────────────────────────────
@@ -154,7 +213,7 @@ class OngletInference(QWidget):
     def _build_left_panel(self) -> QWidget:
         widget = QWidget()
         layout = QVBoxLayout()
-        layout.setSpacing(8)
+        layout.setSpacing(10)
 
         # ── INPUT header
         lbl = QLabel("INPUT")
@@ -164,21 +223,11 @@ class OngletInference(QWidget):
         # ── mode buttons
         mode_row = QHBoxLayout()
         self.btn_single = QPushButton("Single image")
-        #self.btn_batch  = QPushButton("Batch folder")
         self.btn_single.setCheckable(True)
         self.btn_single.setChecked(True)
-        #self.btn_batch.setCheckable(True)
-        _active_style = """
-            QPushButton { padding:8px; border-radius:8px;
-                          background:#1592A2; color:white; }
-            QPushButton:hover { background:#0e6b77; }
-        """
-        self.btn_single.setStyleSheet(_active_style)
-        #self.btn_batch.setStyleSheet("padding:8px; border-radius:8px;")
+        self.btn_single.setStyleSheet(_BTN_MODE_ON)
         self.btn_single.clicked.connect(lambda: self._set_mode("single"))
-        #self.btn_batch.clicked.connect(lambda: self._set_mode("batch"))
         mode_row.addWidget(self.btn_single)
-        #mode_row.addWidget(self.btn_batch)
         layout.addLayout(mode_row)
 
         # ── drop zone + preview
@@ -188,7 +237,7 @@ class OngletInference(QWidget):
 
         self.image_preview = QLabel()
         self.image_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_preview.setFixedHeight(150)
+        self.image_preview.setFixedHeight(200)
         self.image_preview.setStyleSheet("border:1px solid #ccc; border-radius:8px;")
         self.image_preview.setText("preview")
         layout.addWidget(self.image_preview)
@@ -290,23 +339,14 @@ class OngletInference(QWidget):
 
         layout.addSpacing(8)
 
-        # ── Run button
+        # ── Run button — primary CTA, full panel width
         self.btn_run = QPushButton("Run Inference")
-        self.btn_run.setStyleSheet(f"""
-            QPushButton {{
-                padding: 10px; border-radius: 8px;
-                background: {_TEAL}; color: white;
-                font-size: 13px; font-weight: bold;
-            }}
-            QPushButton:hover {{ background: #0e6b77; }}
-            QPushButton:disabled {{ background: #555555; color: #888888; }}
-        """)
+        self.btn_run.setStyleSheet(_BTN_RUN)
         self.btn_run.clicked.connect(self.run_inference)
         layout.addWidget(self.btn_run)
 
         layout.addStretch()
         widget.setLayout(layout)
-        widget.setMaximumWidth(320)
         return widget
 
     def _build_right_panel(self) -> QWidget:
@@ -485,7 +525,7 @@ class OngletInference(QWidget):
         card.setMinimumWidth(80)
         card.setMinimumHeight(90)
         layout = QVBoxLayout()
-        layout.setSpacing(6) 
+        layout.setSpacing(6)
         layout.setContentsMargins(6, 10, 6, 10)
         lbl_title = QLabel(title)
         lbl_title.setStyleSheet(f"font-size:10px; color:{_DIM}; border:none;")
@@ -503,14 +543,7 @@ class OngletInference(QWidget):
         return card
 
     def _set_mode(self, mode: str):
-        active = """
-            QPushButton { padding:8px; border-radius:8px;
-                          background:#1592A2; color:white; }
-            QPushButton:hover { background:#0e6b77; }
-        """
-        inactive = "padding:8px; border-radius:8px;"
-        self.btn_single.setStyleSheet(active   if mode == "single" else inactive)
-        #self.btn_batch.setStyleSheet (inactive if mode == "single" else active)
+        self.btn_single.setStyleSheet(_BTN_MODE_ON if mode == "single" else _BTN_MODE_OFF)
 
     def browse_image(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -522,7 +555,7 @@ class OngletInference(QWidget):
 
     def load_image(self, path: str):
         self._image_path = path
-        pixmap = QPixmap(path).scaled(200, 150, Qt.AspectRatioMode.KeepAspectRatio)
+        pixmap = QPixmap(path).scaled(280, 200, Qt.AspectRatioMode.KeepAspectRatio)
         self.image_preview.setPixmap(pixmap)
 
     # ── transform builder ─────────────────────────────────────────────────────

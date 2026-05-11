@@ -6,29 +6,65 @@ from PyQt6.QtCore import QTimer, QRegularExpression
 from PyQt6.QtGui import QSyntaxHighlighter, QTextCharFormat, QColor, QFont
 
 
-# Shared button base style — both buttons use this so they look consistent
-_BTN_BASE = (
-    "QPushButton {"
-    "  padding: 6px 18px;"
-    "  border-radius: 4px;"
-    "  font-size: 12px;"
-    "  border: 1px solid #444;"
-    "}"
-)
-_BTN_NORMAL_COPY   = _BTN_BASE + "QPushButton { background:#2d2d2d; color:#d4d4d4; }"
-_BTN_FLASHED_COPY  = _BTN_BASE + "QPushButton { background:#1a6b35; color:#ffffff; border-color:#22c55e; }"
-_BTN_EXPORT = _BTN_BASE + """
-QPushButton {
-  background:#1e3a5f;
-  color:#93c5fd;
-  border: 1px solid #3b82f6;
-}
-QPushButton:pressed {
-  background:#162d4a;
-  padding-left: 20px;
-  padding-top: 8px;
-}
+# ── Button style system ────────────────────────────────────────────────────────
+#
+# All buttons share the same geometry and typography — only the color role
+# differs.  Two roles:
+#   • Secondary (ghost)  — Copy code     — low-prominence, outlined
+#   • Primary  (filled)  — Export .py    — one clear call-to-action per toolbar
+#
+# States covered for both: normal · hover · pressed · disabled
+# Flash state (✓ Copied!) inherits the same geometry so the button never shifts.
+
+_BTN_SHARED = """
+    QPushButton {{
+        padding: 6px 20px;
+        border-radius: 5px;
+        font-size: 12px;
+        font-weight: 500;
+        letter-spacing: 0.3px;
+        min-width: 140px;
+        border: 1px solid {border};
+        background: {bg};
+        color: {fg};
+    }}
+    QPushButton:hover {{
+        background: {bg_hover};
+        border-color: {border_hover};
+        color: {fg_hover};
+    }}
+    QPushButton:pressed {{
+        background: {bg_pressed};
+        border-color: {border_pressed};
+    }}
+    QPushButton:disabled {{
+        background: transparent;
+        border-color: #333333;
+        color: #555555;
+    }}
 """
+
+# Secondary — ghost button (Copy)
+_BTN_COPY = _BTN_SHARED.format(
+    bg="#1e1e1e",        fg="#a0a0a0",        border="#3a3a3a",
+    bg_hover="#2a2a2a",  fg_hover="#d4d4d4",  border_hover="#555555",
+    bg_pressed="#242424", border_pressed="#444444",
+)
+
+# Secondary — flash state (✓ Copied!)  same geometry, green tint
+_BTN_COPY_FLASH = _BTN_SHARED.format(
+    bg="#1a3d28",        fg="#4ade80",         border="#2d6a45",
+    bg_hover="#1a3d28",  fg_hover="#4ade80",   border_hover="#2d6a45",
+    bg_pressed="#163321", border_pressed="#2d6a45",
+)
+
+# Primary — filled button (Export)
+_BTN_EXPORT = _BTN_SHARED.format(
+    bg="#222d3d",        fg="#7eb8f7",         border="#2e4a6e",
+    bg_hover="#263547",  fg_hover="#a8d4ff",   border_hover="#3d6494",
+    bg_pressed="#1c2b3a", border_pressed="#2e4a6e",
+)
+
 
 def _fmt(color: str, bold: bool = False, italic: bool = False) -> QTextCharFormat:
     """Helper — builds a QTextCharFormat from a hex color string."""
@@ -169,17 +205,16 @@ class CodeTab(QWidget):
 
         # ── button row ────────────────────────────────────────────────────────
         btn_row = QHBoxLayout()
-        btn_row.setContentsMargins(8, 6, 8, 8)
-        btn_row.setSpacing(10)
+        btn_row.setContentsMargins(10, 8, 10, 10)
+        btn_row.setSpacing(8)
 
         self.btn_copy = QPushButton("Copy code")
-        self.btn_copy.setStyleSheet(_BTN_NORMAL_COPY)
-        self.btn_copy.setMinimumWidth(160)
+        self.btn_copy.setStyleSheet(_BTN_COPY)
+        self.btn_copy.setToolTip("Copy generated script to clipboard")
         self.btn_copy.clicked.connect(self._copy_code)
 
         self.btn_export = QPushButton("⬇  Export .py")
         self.btn_export.setStyleSheet(_BTN_EXPORT)
-        self.btn_export.setMinimumWidth(160)
         self.btn_export.setToolTip("Save the generated script to a file")
         self.btn_export.clicked.connect(self._export_code)
 
@@ -215,13 +250,13 @@ class CodeTab(QWidget):
         QApplication.clipboard().setText(code)
 
         # Green flash for 1500 ms, then revert
-        self.btn_copy.setText("✓ Copied!")
-        self.btn_copy.setStyleSheet(_BTN_FLASHED_COPY)
+        self.btn_copy.setText("✓  Copied!")
+        self.btn_copy.setStyleSheet(_BTN_COPY_FLASH)
         QTimer.singleShot(1500, self._reset_copy_button)
 
     def _reset_copy_button(self) -> None:
         self.btn_copy.setText("Copy code")
-        self.btn_copy.setStyleSheet(_BTN_NORMAL_COPY)
+        self.btn_copy.setStyleSheet(_BTN_COPY)
 
     def _export_code(self) -> None:
         """Open a save-file dialog and write the generated script there."""
