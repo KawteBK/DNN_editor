@@ -38,6 +38,25 @@ from ViewModel.network_vm import NetworkVM
 from ViewModel.training_vm import TrainingVM
 
 
+# ── Icon resolution ────────────────────────────────────────────────────────────
+#
+# Works in three situations:
+#   1. Running from source (python main.py / venv)   → finds assets/ next to this file
+#   2. Frozen by PyInstaller (--onefile or --onedir) → reads from sys._MEIPASS temp dir
+#   3. Frozen into a .app bundle on macOS            → same as case 2
+#
+def _resource_path(relative: str) -> str:
+    """Return the absolute path to a bundled resource, works frozen or not."""
+    base = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+    return os.path.join(base, relative)
+
+
+# Single source of truth for the app icon.
+# Put your icon file at:  <project_root>/assets/icon.png   (or .ico / .icns)
+# PyInstaller will bundle the whole assets/ folder automatically (see build.spec).
+_APP_ICON_PATH = _resource_path(os.path.join("assets", "icon.png"))
+
+
 # ── Toolbar button style system ───────────────────────────────────────────────
 #
 # All toolbar buttons share the same geometry and typography.
@@ -117,6 +136,13 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("NeuroCraft")
         self.setMinimumSize(1200, 800)
         self.showMaximized()
+
+        # ── App / window icon ─────────────────────────────────────────────────
+        from PyQt6.QtGui import QIcon
+        _icon = QIcon(_APP_ICON_PATH)
+        self.setWindowIcon(_icon)
+        # Also set on the QApplication instance so the taskbar / dock uses it.
+        QApplication.instance().setWindowIcon(_icon)
 
         # ── ViewModels ────────────────────────────────────────────────────────
         self.project_vm  = ProjectVM(self)
@@ -821,11 +847,14 @@ class MainWindow(QMainWindow):
             pass  # sound is optional — never crash over it
 
     def _show_notification(self, title: str, message: str) -> None:
-        """Show an OS notification cross-platform."""
+        """Show an OS notification cross-platform, always with the app icon."""
         try:
             system = platform.system()
             if system == "Darwin":
-                # osascript works on every macOS version without extra deps
+                # osascript does not support custom icons — the notification will
+                # carry the app icon automatically once the app is bundled as a
+                # .app with a proper .icns.  While running from source it shows
+                # the Terminal / Python icon; that's a macOS sandbox limitation.
                 script = (
                     f'display notification "{message}" '
                     f'with title "{title}"'
@@ -836,21 +865,30 @@ class MainWindow(QMainWindow):
                 )
             elif system == "Windows":
                 from PyQt6.QtWidgets import QSystemTrayIcon
+                from PyQt6.QtGui import QIcon
                 if QSystemTrayIcon.isSystemTrayAvailable():
-                    tray_icon = QSystemTrayIcon(self)
-                    tray_icon.show()
-                    tray_icon.showMessage(
+                    # Re-use the persistent tray icon if we already created one,
+                    # otherwise create it now and keep a reference so it isn't
+                    # garbage-collected before the message appears.
+                    if not hasattr(self, "_tray_icon") or self._tray_icon is None:
+                        self._tray_icon = QSystemTrayIcon(QIcon(_APP_ICON_PATH), self)
+                        self._tray_icon.show()
+                    self._tray_icon.showMessage(
                         title, message,
-                        QSystemTrayIcon.MessageIcon.Information, 3000,
+                        QIcon(_APP_ICON_PATH),   # custom icon in the notification
+                        3000,
                     )
             else:
-                # Linux: try notify-send (libnotify)
+                # Linux: try notify-send (libnotify), pass the icon if available
                 if subprocess.call(
                     ["which", "notify-send"],
                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                 ) == 0:
+                    cmd = ["notify-send", title, message]
+                    if os.path.isfile(_APP_ICON_PATH):
+                        cmd += ["--icon", _APP_ICON_PATH]
                     subprocess.Popen(
-                        ["notify-send", title, message],
+                        cmd,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                     )
         except Exception:
@@ -894,6 +932,8 @@ class MainWindow(QMainWindow):
         
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    from PyQt6.QtGui import QIcon
+    app.setWindowIcon(QIcon(_APP_ICON_PATH))
     window = MainWindow()
     window.show()
     sys.exit(app.exec())
