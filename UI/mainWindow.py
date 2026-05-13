@@ -641,6 +641,7 @@ class MainWindow(QMainWindow):
         # Disable add/delete buttons in toolbar
         self.btn_add.setEnabled(False)
         self.btn_delete.setEnabled(False)
+        self.btn_connect.setEnabled(False)  # connecting layers mid-training would be Bad
     
         # Disable File menu actions that modify state
         for action in self._file_menu.actions():
@@ -650,6 +651,7 @@ class MainWindow(QMainWindow):
 
     def _on_training_stopped(self):
         self.btn_train.setEnabled(True)
+        self.btn_connect.setEnabled(True)  # re-enable connect button
         self.btn_stop.setEnabled(False)
         self._act_stop.setEnabled(False)    # can't stop what isn't running
         self._timer.stop()
