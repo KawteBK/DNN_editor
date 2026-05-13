@@ -403,7 +403,9 @@ class MainWindow(QMainWindow):
         # Network changes → regenerate code tab
         self.network_vm.network_changed.connect(self._refresh_code_tab)
         self.network_vm.network_changed.connect(self._mark_dirty)   # unsaved changes
-        self.project_vm.project_changed.connect(self._mark_dirty)   # new/loaded project starts dirty
+        # NOTE: project_changed is NOT connected to _mark_dirty — loading/creating
+        # a project is NOT an unsaved change. _dirty is set explicitly by operations
+        # that actually modify state (network edits, config changes, training finish).
         self.tabs.currentChanged.connect(self._on_tab_changed)  # added this for aang
 
         # ── start with a empty project ────────────────────────────────────────
@@ -573,12 +575,19 @@ class MainWindow(QMainWindow):
         self.results_dock.clear()
         self.code_tab.clear()
 
-        # Project just came from disk — nothing is unsaved yet
+        # Restore dataset key so the confusion matrix uses the right class names
+        # if this project was previously trained and is being reopened.
+        if project.dataset and project.dataset._builtinType:
+            self.results_dock.set_dataset_key(project.dataset._builtinType.name)
+        # If the loaded project already has training logs, show them immediately.
+        if project.trainingLogs:
+            self.results_dock.on_training_finished(project.trainingLogs)
+
+        # Project just came from disk — nothing is unsaved yet.
         self._dirty = False
-        print("hello from mainwindow project changed")
 
         if project.dataset and project.networkConfig:
-          self._refresh_code_tab()
+            self._refresh_code_tab()
         self._update_train_button_state()
 
 
@@ -674,29 +683,29 @@ class MainWindow(QMainWindow):
 
 
     def _on_training_finished(self, project):
-        #import winsound  # Windows
-        # OR for cross-platform:
-        # from PyQt6.QtMultimedia import QSound
-    
-        # Write the updated project back and save
-        self.project_vm._project = project
-        self.project_vm.save()
+        # Capture elapsed before anything resets it
         elapsed = self.training_vm.elapsed_seconds()
 
-        #here we populate the result dock:
+        # Write the updated project back through the VM so project_changed fires,
+        # keeping the inference tab, dataset dock, and title bar all in sync.
+        # Direct mutation of _project bypassed the signal — fixed here.
+        self.project_vm._project = project
+        self.project_vm.save()
+        # Training produced new weights + logs — that IS a state change worth saving,
+        # but save() just ran, so the project is now in sync with disk.
+        self._dirty = False
 
- 
-        #first the dataset for the confusion matrix
+        # ── populate ResultsDock ──────────────────────────────────────────────
+        # Set dataset key first so the confusion matrix uses the right class names
         if project.dataset and project.dataset._builtinType:
             self.results_dock.set_dataset_key(project.dataset._builtinType.name)
-        #training logs for the the rest of scores, precicion ect
+        # Push the training history (test scores, confusion matrix, etc.)
         if project.trainingLogs:
             self.results_dock.on_training_finished(project.trainingLogs)
-    
+
         # Play sound + notify
         self._play_sound()
         self._show_notification("Training Complete", f"Finished in {elapsed:.0f} seconds!")
-    
         self.statusBar().showMessage(f"Training complete — {elapsed:.0f}s", 5000)
 
     # ── code tab ─────────────────────────────────────────────────────────────

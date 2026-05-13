@@ -116,9 +116,17 @@ class CanvasView(QGraphicsView):
         ADDED: Accept the drag only if it carries our custom mime type.
         This guards against accepting file-system drags or other Qt drags.
         Also creates the ghost NodeItem at the entry position.
+
+        ScrollHandDrag must be disabled for the duration of the palette drag.
+        When it is active, Qt's internal drag-mode machinery grabs the mouse
+        and holds a stale drag state after the drop, which prevents the event
+        loop from dispatching queued cross-thread signals (e.g. epoch_done from
+        the training worker) — causing the monitor tab to go blank mid-training.
+        We restore ScrollHandDrag in dropEvent and dragLeaveEvent.
         """
         if event.mimeData().hasFormat(LAYER_MIME_TYPE):
             event.acceptProposedAction()
+            self.setDragMode(QGraphicsView.DragMode.NoDrag)   # FIXED
             layer_type = event.mimeData().data(LAYER_MIME_TYPE).data().decode()
             self._show_ghost(layer_type, self.mapToScene(event.position().toPoint()))
         else:
@@ -140,6 +148,7 @@ class CanvasView(QGraphicsView):
     def dragLeaveEvent(self, event) -> None:                              # ADDED
         """ADDED: Cursor left the canvas without dropping — remove ghost."""
         self._remove_ghost()
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)   # FIXED
         super().dragLeaveEvent(event)
 
     def dropEvent(self, event) -> None:                                   # ADDED
@@ -163,8 +172,7 @@ class CanvasView(QGraphicsView):
             return
 
         event.acceptProposedAction()
-
-        layer_type = event.mimeData().data(LAYER_MIME_TYPE).data().decode()
+        self.setDragMode(QGraphicsView.DragMode.ScrollHandDrag)   # FIXED        layer_type = event.mimeData().data(LAYER_MIME_TYPE).data().decode()
         drop_scene_pos = self.mapToScene(event.position().toPoint())
 
         self._remove_ghost()   # ADDED — clean up ghost before real node appears

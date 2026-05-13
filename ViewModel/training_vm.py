@@ -136,6 +136,7 @@ class TrainingVM(QObject):
 
     def _on_epoch_done(self, epoch: int, total: int,
                        train_loss: float, val_metrics: dict) -> None:
+        print(f"[TrainingVM] _on_epoch_done called epoch={epoch}")  # ADD THIS
         self.epoch_progress.emit(epoch, total, train_loss, val_metrics)
 
     def _on_training_done(self, project: Project) -> None:

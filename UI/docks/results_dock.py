@@ -459,6 +459,14 @@ class ResultsDock(QDockWidget):
         self._dataset_key = key
 
     def on_epoch(self, epoch: int, total: int, train_loss: float, val_metrics: dict) -> None:
+
+        print(f"[WORKER] on_epoch called epoch={epoch}/{total}")   # ADD THIS
+        if self._stop_event.is_set():
+          return False
+          self.epoch_done.emit(epoch, total, train_loss, val_metrics)
+        print(f"[WORKER] epoch_done emitted")                      # ADD THIS
+        return True
+    
         if epoch == 1:
             self._tabs.setCurrentIndex(0)
             self._monitor_hint.setVisible(False)
