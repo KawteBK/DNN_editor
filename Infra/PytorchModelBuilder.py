@@ -67,10 +67,13 @@ class GraphModule(nn.Module):
         self._mods = nn.ModuleDict()
         for lid, mod in node_modules.items():
             if mod is not None:
-                # ModuleDict keys cannot contain arbitrary chars — sanitise
-                self._mods[lid.replace("-", "_").replace(".", "_")] = mod
+                # ModuleDict keys cannot contain arbitrary chars — sanitise.
+                # Spaces, hyphens and dots are all replaced with underscores so
+                # the key is a valid Python identifier and stays stable across
+                # train → save → load → predict round-trips.
+                self._mods[lid.replace("-", "_").replace(".", "_").replace(" ", "_")] = mod
         self._lid_to_key = {
-            lid: lid.replace("-", "_").replace(".", "_")
+            lid: lid.replace("-", "_").replace(".", "_").replace(" ", "_")
             for lid in node_modules if node_modules[lid] is not None
         }
 

@@ -17,6 +17,11 @@ _DISPLAY_INFO = {
     "CIFAR-100":     ("CIFAR-100",    "100",  "(3, 32, 32)",  "50,000",    "10,000", BuiltinDataset.CIFAR100),
     "SVHN":          ("SVHN",         "10",   "(3, 32, 32)",  "73,257",    "26,032", BuiltinDataset.SVHN),
     "STL-10":        ("STL-10",       "10",   "(3, 96, 96)",  "5,000",     "8,000",  BuiltinDataset.STL10),
+    # ── sequence variants ─────────────────────────────────────────────────────
+    # Same underlying images as MNIST / CIFAR-10 but reshaped into
+    # (seq_len, features) so they connect directly to Recurrent layers.
+    "MNIST-Seq":     ("MNIST-Seq",    "10",   "(28, 28)",     "60,000",    "10,000", BuiltinDataset.MNIST_SEQ),
+    "CIFAR-10-Seq":  ("CIFAR-10-Seq", "10",   "(32, 96)",     "50,000",    "10,000", BuiltinDataset.CIFAR10_SEQ),
 }
 
 
@@ -206,6 +211,12 @@ class DatasetDock(QDockWidget):
         BuiltinDataset.STL10:         ("STL10",        [
             "airplane", "bird", "car", "cat", "deer",
             "dog", "horse", "monkey", "ship", "truck"]),
+        # sequence variants — preview shows the same images as their base datasets
+        # (the SequenceDataset reshape is invisible at the raw-pixel level)
+        BuiltinDataset.MNIST_SEQ:     ("MNIST",        None),
+        BuiltinDataset.CIFAR10_SEQ:   ("CIFAR10",      [
+            "airplane", "automobile", "bird", "cat", "deer",
+            "dog", "frog", "horse", "ship", "truck"]),
     }
 
     def _load_preview_samples(self, builtin_type: BuiltinDataset, n: int):

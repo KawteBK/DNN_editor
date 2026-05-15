@@ -262,15 +262,18 @@ class PyTorchTrainer:
         # numpy array
         if isinstance(inputs, np.ndarray):
             tensor = torch.from_numpy(inputs).float()
-            # 1D (flat vector), 2D (seq/flat), 3D (C,H,W) → add batch dim
-            if tensor.dim() in (1, 3):
+            # 1D (flat vector)      → (1, features)       single Dense sample
+            # 2D (seq_len, feats)   → (1, seq_len, feats) single Recurrent sample
+            # 3D (C, H, W)          → (1, C, H, W)        single image sample
+            # anything higher-dim   → already batched, trust the caller
+            if tensor.dim() in (1, 2, 3):
                 return tensor.unsqueeze(0)
-            return tensor   # already (N, ...) — trust the caller
- 
+            return tensor
+
         # torch.Tensor
         if isinstance(inputs, torch.Tensor):
             tensor = inputs.float()
-            if tensor.dim() in (1, 3):
+            if tensor.dim() in (1, 2, 3):
                 return tensor.unsqueeze(0)
             return tensor
  

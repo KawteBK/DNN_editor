@@ -18,6 +18,14 @@ class BuiltinDataset(Enum):
     CIFAR100      = "cifar100"
     SVHN          = "svhn"
     STL10         = "stl10"
+    # ── sequence variants ─────────────────────────────────────────────────────
+    # These reuse the same image data but reshape each sample into a sequence
+    # so Recurrent layers can be connected directly after the InputLayer.
+    #
+    # MNIST_SEQ:   each 1×28×28 image → 28 timesteps of 28 features each
+    # CIFAR10_SEQ: each 3×32×32 image → 32 timesteps of 96 features each (3 channels × 32 cols)
+    MNIST_SEQ     = "mnist_seq"
+    CIFAR10_SEQ   = "cifar10_seq"
 
 
 BUILTIN_METADATA = {
@@ -28,6 +36,9 @@ BUILTIN_METADATA = {
     BuiltinDataset.CIFAR100:      {"inputShape": (3, 32, 32),  "numClasses": 100},
     BuiltinDataset.SVHN:          {"inputShape": (3, 32, 32),  "numClasses": 10},
     BuiltinDataset.STL10:         {"inputShape": (3, 96, 96),  "numClasses": 10},
+    # sequence variants — 2-D shapes (seq_len, features) that Recurrent accepts directly
+    BuiltinDataset.MNIST_SEQ:     {"inputShape": (28, 28),     "numClasses": 10},
+    BuiltinDataset.CIFAR10_SEQ:   {"inputShape": (32, 96),     "numClasses": 10},
 }
 
 

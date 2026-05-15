@@ -143,6 +143,9 @@ _CLASS_NAMES = {
     "svhn":          [str(i) for i in range(10)],
     "stl10":         ["Plane", "Bird", "Car", "Cat", "Deer",
                       "Dog", "Horse", "Monkey", "Ship", "Truck"],
+    "mnist_seq":     [str(i) for i in range(10)],
+    "cifar10_seq":   ["Plane", "Car", "Bird", "Cat", "Deer",
+                      "Dog", "Frog", "Horse", "Ship", "Truck"],
 }
 
 _BG      = "#2b2b2b"
@@ -560,9 +563,18 @@ class OngletInference(QWidget):
 
     # ── transform builder ─────────────────────────────────────────────────────
 
+    def _is_sequence_dataset(self, project) -> bool:
+        """Returns True when the active dataset is a sequence variant."""
+        from Core.dataset import BuiltinDataset
+        if project.dataset is None or project.dataset._builtinType is None:
+            return False
+        return project.dataset._builtinType in (
+            BuiltinDataset.MNIST_SEQ, BuiltinDataset.CIFAR10_SEQ
+        )
+
     def _build_transform(self, project, normalize: bool):
         """
-        Returns a torchvision Compose pipeline.
+        Returns a torchvision Compose pipeline for IMAGE datasets.
         normalize=True  → the same pipeline used during training (correct).
         normalize=False → ToTensor only, no Normalize (experiment / demonstration).
         """
@@ -593,20 +605,90 @@ class OngletInference(QWidget):
 
         return transforms.Compose(steps)
 
+    def _build_seq_transform(self, project, normalize: bool):
+        """
+        Transform pipeline for SEQUENCE datasets (MNIST_SEQ, CIFAR10_SEQ).
+        Resizes to the BASE image dimensions, not the sequence shape,
+        because the reshape to (seq_len, features) happens after ToTensor.
+        """
+        from torchvision import transforms
+        from Core.dataset import BuiltinDataset
+        from Infra.pytorchDataset import _NORMALIZATION_STATS
+
+        bt = project.dataset._builtinType
+
+        if bt == BuiltinDataset.MNIST_SEQ:
+            steps = [
+                transforms.Grayscale(num_output_channels=1),
+                transforms.Resize((28, 28)),
+                transforms.ToTensor(),
+            ]
+        else:  # CIFAR10_SEQ
+            steps = [
+                transforms.Resize((32, 32)),
+                transforms.ToTensor(),
+            ]
+
+        if normalize:
+            mean, std = _NORMALIZATION_STATS.get(bt, ((0.5,), (0.5,)))
+            steps.append(transforms.Normalize(mean=mean, std=std))
+
+        return transforms.Compose(steps)
+
+    def _image_to_seq_tensor(self, img_tensor, project):
+        """
+        Reshapes (C, H, W) → (seq_len, features), mirroring SequenceDataset.
+        MNIST_SEQ:   (1,28,28) → squeeze → (28,28)
+        CIFAR10_SEQ: (3,32,32) → permute(1,0,2).reshape → (32,96)
+        """
+        from Core.dataset import BuiltinDataset
+        bt = project.dataset._builtinType
+        if bt == BuiltinDataset.MNIST_SEQ:
+            return img_tensor.squeeze(0)
+        else:
+            C, H, W = img_tensor.shape
+            return img_tensor.permute(1, 0, 2).reshape(H, C * W)
+
     def _run_single_pass(self, project, normalize: bool):
         """
         Runs one forward pass and returns (results_dict, elapsed_ms).
-        Raises on any error so the caller can display it cleanly.
+
+        The key rule: we build the final tensor ourselves (with the correct
+        shape) and pass it directly to predict().  We do NOT let predict()
+        call _to_tensor() again — that would add an extra batch dimension.
+
+        predict() accepts a pre-batched tensor (N, *) so we pass (1, *).
+
+        Image path:    PIL → transform → (C,H,W) → unsqueeze(0) → (1,C,H,W)
+        Sequence path: PIL → seq_transform → (C,H,W)
+                           → _image_to_seq_tensor → (seq_len, features)
+                           → unsqueeze(0) → (1, seq_len, features)
+        Both are already 4D / 3D with a batch dim, so _to_tensor must not
+        touch them. We achieve this by passing a tensor whose dim() == 4
+        for images (left alone) and dim() == 3 for sequences — _to_tensor
+        only unsqueezes dim 1, 2, 3, so a dim-3 sequence gets unsqueezed
+        to (1, seq_len, features). Therefore for sequences we pass the
+        (seq_len, features) 2D tensor and let _to_tensor add the batch dim
+        correctly (dim==2 is now handled after our trainer.py fix).
         """
         from PIL import Image as PILImage
         from Infra.trainer import PyTorchTrainer
 
-        transform = self._build_transform(project, normalize=normalize)
-        img = PILImage.open(self._image_path).convert("RGB")
-        tensor = transform(img).unsqueeze(0)
+        if self._is_sequence_dataset(project):
+            # Build (seq_len, features) — _to_tensor will unsqueeze to (1, seq_len, features)
+            transform = self._build_seq_transform(project, normalize=normalize)
+            img = PILImage.open(self._image_path).convert("RGB")
+            img_tensor = transform(img)                                   # (C, H, W)
+            input_tensor = self._image_to_seq_tensor(img_tensor, project) # (seq_len, features)
+            # Do NOT unsqueeze here — trainer._to_tensor handles dim==2
+        else:
+            # Build (1, C, H, W) — _to_tensor sees dim==4 and leaves it alone
+            transform = self._build_transform(project, normalize=normalize)
+            img = PILImage.open(self._image_path).convert("RGB")
+            input_tensor = transform(img).unsqueeze(0)                    # (1, C, H, W)
 
         t0 = time.perf_counter()
-        results = PyTorchTrainer.predict(project, tensor)
+        results = PyTorchTrainer.predict(project, input_tensor)
         elapsed_ms = (time.perf_counter() - t0) * 1000
         return results, elapsed_ms
 

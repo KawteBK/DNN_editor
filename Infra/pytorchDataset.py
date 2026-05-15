@@ -1,5 +1,6 @@
 import os #yeah for file operations, creating folders type shit
-from torch.utils.data import DataLoader, random_split #data loader is for loading datasets in batches (tgasmhoum not load everything at once) and random_split is for splitting the dataset into train and validation sets
+import torch
+from torch.utils.data import DataLoader, random_split, Dataset as TorchDataset  #data loader is for loading datasets in batches (tgasmhoum not load everything at once) and random_split is for splitting the dataset into train and validation sets
 from torchvision import datasets, transforms #transform is for transforming images before training
 
 from Core.dataset import Dataset, DatasetSource, BuiltinDataset
@@ -16,9 +17,59 @@ _NORMALIZATION_STATS = {
     BuiltinDataset.CIFAR100:      ((0.5071, 0.4867, 0.4408),      (0.2675, 0.2565, 0.2761)),
     BuiltinDataset.SVHN:          ((0.4377, 0.4438, 0.4728),      (0.1980, 0.2010, 0.1970)),
     BuiltinDataset.STL10:         ((0.4467, 0.4398, 0.4066),      (0.2242, 0.2215, 0.2239)),
+    # sequence variants share the same pixel stats as their image counterparts
+    # (same underlying data, just reshaped) so we reuse those values.
+    BuiltinDataset.MNIST_SEQ:     ((0.1307,),                     (0.3081,)),
+    BuiltinDataset.CIFAR10_SEQ:   ((0.4914, 0.4822, 0.4465),      (0.2470, 0.2435, 0.2616)),
 }
 
 # benifets of noramlizing are : faster training ; stable gradients; better convergence
+
+
+# ── SequenceDataset wrapper ───────────────────────────────────────────────────
+
+class SequenceDataset(TorchDataset):
+    """
+    Wraps an existing image dataset and reshapes each sample into a 2-D
+    sequence tensor that Recurrent layers (LSTM / GRU) can consume.
+
+    Reshaping logic
+    ───────────────
+    Image tensor coming in:  (C, H, W)   — standard torchvision output
+
+    MNIST / grayscale  (C=1):  squeeze channel → (H, W) = (28, 28)
+                               → 28 timesteps, each with 28 features (pixel columns)
+
+    CIFAR10 / RGB      (C=3):  flatten channel + width → (H, C*W) = (32, 96)
+                               → 32 timesteps, each with 96 features (3 channels × 32 cols)
+
+    This matches the inputShape declared in BUILTIN_METADATA exactly:
+        MNIST_SEQ   → (28, 28)
+        CIFAR10_SEQ → (32, 96)
+
+    Why this reshaping? Each row of the image becomes one timestep. The RNN
+    reads the image top-to-bottom, one row at a time — a classic benchmark
+    called "sequential MNIST" / "row-wise MNIST".
+    """
+
+    def __init__(self, base_dataset: TorchDataset):
+        self._base = base_dataset
+
+    def __len__(self) -> int:
+        return len(self._base)
+
+    def __getitem__(self, idx):
+        image, label = self._base[idx]          # image: (C, H, W) float tensor
+        C, H, W = image.shape
+
+        if C == 1:
+            # Grayscale: drop the channel dim → (H, W)
+            seq = image.squeeze(0)              # (28, 28)
+        else:
+            # RGB: permute to (H, C, W) then flatten last two dims → (H, C*W)
+            seq = image.permute(1, 0, 2).reshape(H, C * W)   # (32, 96)
+
+        return seq, label
 
 
 
@@ -97,6 +148,11 @@ class PyTorchDatasets:
 
         Separated from get_dataloaders so we can add augmentation here later
         (RandomHorizontalFlip, RandomCrop, etc.) without touching anything else.
+
+        Note for sequence variants: the image-to-tensor transform is applied first
+        (producing a standard (C, H, W) tensor), then SequenceDataset reshapes it
+        into (seq_len, features) at __getitem__ time. So we use the same transform
+        pipeline here — only the wrapping layer differs.
         """
         mean, std = _NORMALIZATION_STATS[builtinType]
         return transforms.Compose([
@@ -143,6 +199,18 @@ class PyTorchDatasets:
         elif builtinType == BuiltinDataset.STL10:
             return datasets.STL10(**kwargs, split="train")
 
+        elif builtinType == BuiltinDataset.MNIST_SEQ:
+            # Load standard MNIST then wrap it so each (1,28,28) image
+            # becomes a (28,28) sequence tensor at __getitem__ time.
+            base = datasets.MNIST(**kwargs, train=True)
+            return SequenceDataset(base)
+
+        elif builtinType == BuiltinDataset.CIFAR10_SEQ:
+            # Load standard CIFAR-10 then wrap it so each (3,32,32) image
+            # becomes a (32,96) sequence tensor at __getitem__ time.
+            base = datasets.CIFAR10(**kwargs, train=True)
+            return SequenceDataset(base)
+
         else:
             raise ValueError(f"Unsupported built-in dataset: {builtinType}")
 
@@ -184,6 +252,14 @@ class PyTorchDatasets:
 
         elif builtinType == BuiltinDataset.STL10:
             return datasets.STL10(**kwargs, split="test")  # added this for aang
+
+        elif builtinType == BuiltinDataset.MNIST_SEQ:
+            base = datasets.MNIST(**kwargs, train=False)
+            return SequenceDataset(base)
+
+        elif builtinType == BuiltinDataset.CIFAR10_SEQ:
+            base = datasets.CIFAR10(**kwargs, train=False)
+            return SequenceDataset(base)
 
         else:
             raise ValueError(f"Unsupported built-in dataset: {builtinType}")
